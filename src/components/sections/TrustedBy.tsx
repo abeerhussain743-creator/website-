@@ -6,7 +6,7 @@ export function TrustedBy() {
   const logos = [...TRUSTED_BY, ...TRUSTED_BY];
 
   return (
-    <section className="relative border-y border-white/5 py-14" aria-label="Trusted by">
+    <section className="relative border-y border-white/5 py-14" aria-label="Trusted by" data-reveal>
       <div className="mx-auto mb-8 max-w-6xl px-6 text-center">
         <p className="text-xs tracking-[0.28em] text-muted uppercase">
           Trusted by forward-looking enterprises

@@ -4,6 +4,7 @@ import { useMemo, useRef } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { Float, Sphere, MeshDistortMaterial, Stars } from "@react-three/drei";
 import * as THREE from "three";
+import { createSeededRandom } from "@/lib/random";
 
 function AICore({ mouse }: { mouse: React.MutableRefObject<{ x: number; y: number }> }) {
   const group = useRef<THREE.Group>(null);
@@ -26,11 +27,12 @@ function AICore({ mouse }: { mouse: React.MutableRefObject<{ x: number; y: numbe
   });
 
   const particles = useMemo(() => {
+    const rand = createSeededRandom(42);
     const pts = new Float32Array(180 * 3);
     for (let i = 0; i < 180; i++) {
-      const r = 2.2 + Math.random() * 1.8;
-      const theta = Math.random() * Math.PI * 2;
-      const phi = Math.acos(2 * Math.random() - 1);
+      const r = 2.2 + rand() * 1.8;
+      const theta = rand() * Math.PI * 2;
+      const phi = Math.acos(2 * rand() - 1);
       pts[i * 3] = r * Math.sin(phi) * Math.cos(theta);
       pts[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
       pts[i * 3 + 2] = r * Math.cos(phi);
@@ -140,14 +142,14 @@ export function HeroScene() {
     >
       <Canvas
         dpr={[1, 1.5]}
-        camera={{ position: [0, 0, 6.2], fov: 42 }}
+        camera={{ position: [0, 0, 5.4], fov: 45 }}
         gl={{ antialias: true, alpha: true, powerPreference: "high-performance" }}
         style={{ background: "transparent" }}
       >
         <SceneLights />
-        <Stars radius={40} depth={30} count={1200} factor={2.5} saturation={0} fade speed={0.6} />
+        <Stars radius={50} depth={40} count={1600} factor={2.8} saturation={0} fade speed={0.6} />
         <AICore mouse={mouse} />
-        <fog attach="fog" args={["#06070A", 8, 18]} />
+        <fog attach="fog" args={["#06070A", 7, 16]} />
       </Canvas>
     </div>
   );

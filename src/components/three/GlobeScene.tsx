@@ -4,18 +4,20 @@ import { useMemo, useRef } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { Float } from "@react-three/drei";
 import * as THREE from "three";
+import { createSeededRandom } from "@/lib/random";
 
 function Globe({ mouse }: { mouse: React.MutableRefObject<{ x: number; y: number }> }) {
   const group = useRef<THREE.Group>(null);
   const points = useRef<THREE.Points>(null);
 
   const particlePos = useMemo(() => {
+    const rand = createSeededRandom(77);
     const count = 900;
     const arr = new Float32Array(count * 3);
     for (let i = 0; i < count; i++) {
-      const r = 1.85 + Math.random() * 0.35;
-      const theta = Math.random() * Math.PI * 2;
-      const phi = Math.acos(2 * Math.random() - 1);
+      const r = 1.85 + rand() * 0.35;
+      const theta = rand() * Math.PI * 2;
+      const phi = Math.acos(2 * rand() - 1);
       arr[i * 3] = r * Math.sin(phi) * Math.cos(theta);
       arr[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
       arr[i * 3 + 2] = r * Math.cos(phi);

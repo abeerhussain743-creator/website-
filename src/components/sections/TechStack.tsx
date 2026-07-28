@@ -6,7 +6,7 @@ import { SectionHeading } from "@/components/ui/section-heading";
 
 export function TechStack() {
   return (
-    <section id="technology" className="relative scroll-mt-24 py-28">
+    <section id="technology" className="relative scroll-mt-24 py-28" data-reveal>
       <div className="mx-auto max-w-6xl px-6">
         <SectionHeading
           eyebrow="Technology Stack"

@@ -8,6 +8,7 @@ import { CommandPalette } from "@/components/layout/CommandPalette";
 import { AIAssistant } from "@/components/layout/AIAssistant";
 import { FloatingDock } from "@/components/layout/FloatingDock";
 import { SmoothScroll } from "@/components/providers/SmoothScroll";
+import { ScrollStory } from "@/components/providers/ScrollStory";
 import { SITE } from "@/lib/constants";
 import "./globals.css";
 
@@ -66,6 +67,7 @@ export default function RootLayout({
       </head>
       <body className="min-h-full bg-background font-sans text-foreground">
         <SmoothScroll>
+          <ScrollStory />
           <ScrollProgress />
           <AnimatedCursor />
           <Navbar />

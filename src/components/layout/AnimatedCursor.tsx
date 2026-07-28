@@ -1,10 +1,20 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { motion, useMotionValue, useSpring } from "framer-motion";
 
+function subscribeFinePointer(onStoreChange: () => void) {
+  const mql = window.matchMedia("(pointer: fine)");
+  mql.addEventListener("change", onStoreChange);
+  return () => mql.removeEventListener("change", onStoreChange);
+}
+
+function getFinePointer() {
+  return window.matchMedia("(pointer: fine)").matches;
+}
+
 export function AnimatedCursor() {
-  const [visible, setVisible] = useState(false);
+  const fine = useSyncExternalStore(subscribeFinePointer, getFinePointer, () => false);
   const [hovering, setHovering] = useState(false);
   const x = useMotionValue(-100);
   const y = useMotionValue(-100);
@@ -12,11 +22,9 @@ export function AnimatedCursor() {
   const springY = useSpring(y, { stiffness: 420, damping: 32, mass: 0.4 });
 
   useEffect(() => {
-    const fine = window.matchMedia("(pointer: fine)").matches;
     if (!fine) return;
 
     document.body.classList.add("has-custom-cursor");
-    setVisible(true);
 
     const move = (e: MouseEvent) => {
       x.set(e.clientX);
@@ -40,9 +48,9 @@ export function AnimatedCursor() {
       window.removeEventListener("mousemove", move);
       window.removeEventListener("mouseover", onOver);
     };
-  }, [x, y]);
+  }, [fine, x, y]);
 
-  if (!visible) return null;
+  if (!fine) return null;
 
   return (
     <>
