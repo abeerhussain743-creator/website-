@@ -1,10 +1,12 @@
 import 'dotenv/config';
+import path from 'path';
 import http from 'http';
 import express from 'express';
 import cors from 'cors';
 import morgan from 'morgan';
 import cookieParser from 'cookie-parser';
 import { Server } from 'socket.io';
+import { fileURLToPath } from 'url';
 import { connectDB } from './config/db.js';
 import { initSocket } from './socket/index.js';
 import { seedDatabase } from './seed/seed.js';
@@ -20,13 +22,26 @@ import billingRoutes from './routes/billing.js';
 import notificationRoutes from './routes/notifications.js';
 import { PIPELINE_STAGES, PLANS } from './config/plans.js';
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const clientDist = path.resolve(__dirname, '../../client/dist');
+
 const app = express();
 const server = http.createServer(app);
 const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
+const allowOrigins = [clientUrl, 'http://localhost:5173', 'http://localhost:5000'];
+
+function corsOrigin(origin, callback) {
+  if (!origin || allowOrigins.includes(origin) || /\.loca\.lt$/.test(origin) || /\.trycloudflare\.com$/.test(origin)) {
+    callback(null, true);
+  } else {
+    callback(null, true); // demo-friendly; tighten in production
+  }
+}
 
 const io = new Server(server, {
   cors: {
-    origin: clientUrl,
+    origin: corsOrigin,
     methods: ['GET', 'POST', 'PATCH', 'DELETE'],
   },
 });
@@ -35,7 +50,7 @@ initSocket(io);
 
 app.post('/api/billing/webhook', express.raw({ type: 'application/json' }), stripeWebhook);
 
-app.use(cors({ origin: clientUrl, credentials: true }));
+app.use(cors({ origin: corsOrigin, credentials: true }));
 app.use(morgan('dev'));
 app.use(cookieParser());
 app.use(express.json());
@@ -56,6 +71,14 @@ app.use('/api/meetings', meetingRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/billing', billingRoutes);
 app.use('/api/notifications', notificationRoutes);
+
+app.use(express.static(clientDist));
+app.get(/^(?!\/api).*/, (req, res, next) => {
+  if (req.method !== 'GET') return next();
+  res.sendFile(path.join(clientDist, 'index.html'), (err) => {
+    if (err) next();
+  });
+});
 
 app.use((err, _req, res, _next) => {
   console.error(err);

@@ -19,9 +19,8 @@ export function SocketProvider({ children }) {
     }
 
     const token = localStorage.getItem('relay_token');
-    const s = io(window.location.origin.includes('5173')
-      ? 'http://localhost:5000'
-      : undefined, {
+    const socketUrl = import.meta.env.DEV ? 'http://localhost:5000' : undefined;
+    const s = io(socketUrl, {
       auth: { token },
       transports: ['websocket', 'polling'],
     });
