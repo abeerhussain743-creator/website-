@@ -175,9 +175,7 @@ export default function CallDetail() {
               </div>
               <div>
                 <div className="text-xs uppercase tracking-[0.14em] text-[var(--color-ink-soft)]">Urgency</div>
-                <div className="mt-1 font-medium">
-                  {analysis.urgency === 'High' ? '🔥 High' : analysis.urgency}
-                </div>
+                <div className="mt-1 font-medium">{analysis.urgency}</div>
               </div>
             </section>
           </div>

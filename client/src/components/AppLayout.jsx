@@ -93,7 +93,7 @@ export default function AppLayout() {
               >
                 <Bell size={18} />
                 {unread > 0 && (
-                  <span className="absolute -top-1 -right-1 h-5 min-w-5 px-1 rounded-full bg-coral-600 bg-[var(--color-coral)] text-white text-[11px] grid place-items-center">
+                  <span className="absolute -top-1 -right-1 h-5 min-w-5 px-1 rounded-full bg-[var(--color-coral)] text-white text-[11px] grid place-items-center">
                     {unread}
                   </span>
                 )}
