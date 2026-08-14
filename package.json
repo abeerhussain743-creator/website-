@@ -1,0 +1,17 @@
+{
+  "name": "dealflow-ai",
+  "version": "1.0.0",
+  "private": true,
+  "description": "DealFlow AI — Turn every sales call into a ready-to-send proposal",
+  "scripts": {
+    "dev": "concurrently \"npm run dev --prefix server\" \"npm run dev --prefix client\"",
+    "dev:server": "npm run dev --prefix server",
+    "dev:client": "npm run dev --prefix client",
+    "start": "npm run start --prefix server",
+    "build": "npm run build --prefix client",
+    "seed": "npm run seed --prefix server"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}
