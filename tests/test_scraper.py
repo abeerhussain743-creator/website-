@@ -105,3 +105,30 @@ def test_never_merge_different_skus(sample_html: str) -> None:
     records = extract_from_jsonld(sample_html, "https://shop.example.com/p/oak")
     assert len(records) == 2
     assert records[0].sku != records[1].sku
+
+
+def test_attach_variant_specs_from_floorscenter_table() -> None:
+    from product_scraper.scraper.dom import attach_specs_to_records
+
+    html = (FIXTURES / "floorscenter_specs.html").read_text(encoding="utf-8")
+    records = [
+        ProductRecord(sku="SKU-A", product_title="Basel Oak", raw_specs={"variant_id": 111}),
+        ProductRecord(sku="SKU-B", product_title="Bremen Gray", raw_specs={"variant_id": 222}),
+    ]
+    enriched = attach_specs_to_records(records, html)
+    assert "Thickness: 5.0 mm" in enriched[0].specifications
+    assert "Installation Type: Angle Click" in enriched[0].specifications
+    assert enriched[0].raw_specs["Color Shade"] == "Light Brown"
+    assert enriched[1].raw_specs["Color Shade"] == "Gray"
+    assert enriched[0].color == "Light Brown"
+    assert "7 inch" in enriched[0].size and "48 inch" in enriched[0].size
+
+
+def test_extract_specs_visible_fallback() -> None:
+    from product_scraper.scraper.dom import _extract_specs
+    from bs4 import BeautifulSoup
+
+    html = (FIXTURES / "floorscenter_specs.html").read_text(encoding="utf-8")
+    specs = _extract_specs(BeautifulSoup(html, "lxml"))
+    assert specs.get("Thickness") == "5.0 mm"
+    assert specs.get("Installation Type") == "Angle Click"

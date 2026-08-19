@@ -16,9 +16,9 @@ from urllib3.util.retry import Retry
 from product_scraper.compliance.rate_limit import RateLimiter
 from product_scraper.compliance.robots import USER_AGENT, RobotsChecker
 from product_scraper.models import ProductRecord, ScrapeFailure, ScrapeResult
-from product_scraper.scraper.dom import extract_from_dom
+from product_scraper.scraper.dom import attach_specs_to_records, extract_from_dom
 from product_scraper.scraper.jsonld import extract_from_jsonld
-from product_scraper.scraper.normalize import clean_text
+from product_scraper.scraper.normalize import clean_text, specs_to_string
 from product_scraper.scraper.validators import validate_records
 from product_scraper.scraper.variants import discover_and_scrape_variants, merge_variant_records
 
@@ -149,13 +149,32 @@ class ProductScraper:
 
         records = self._extract_pipeline(html, url, network_payloads)
 
+        # Shopify product.js often has cleaner variant/option data
+        shopify_js = self._fetch_shopify_product_js(url)
+        if shopify_js:
+            from product_scraper.scraper.dom import _records_from_shopify_product
+
+            js_records = _records_from_shopify_product(shopify_js, url)
+            js_records = attach_specs_to_records(js_records, html)
+            if js_records:
+                # Prefer Shopify.js rows when they carry real SKUs / options
+                records = self._prefer_richer_records(js_records, records)
+
+        # Always attach HTML spec tables (FloorsCenter-style) onto final rows
+        records = attach_specs_to_records(records, html)
+
         # Interactive variant loop when Playwright is available
         if used_browser and self.config.interact_variants and self._browser is not None:
             try:
                 interactive = self._interactive_variants(url)
+                interactive = attach_specs_to_records(interactive, html)
                 records = merge_variant_records(records, interactive)
+                records = attach_specs_to_records(records, html)
             except Exception as exc:  # noqa: BLE001
                 logger.warning("Interactive variant scrape failed for %s: %s", url, exc)
+
+        # Drop numeric-only Shopify internal IDs when a real SKU sibling exists
+        records = self._drop_internal_id_duplicates(records)
 
         if not records:
             return ScrapeResult(
@@ -175,6 +194,73 @@ class ProductScraper:
             logger.warning("%s: %s", url, warning)
 
         return ScrapeResult(records=validated, source_url=url, scraped_at=scraped_at)
+
+    def _fetch_shopify_product_js(self, url: str) -> dict | None:
+        """Fetch /products/handle.js when the URL looks like a Shopify product page."""
+        from urllib.parse import urlparse
+
+        parsed = urlparse(url)
+        path = parsed.path.rstrip("/")
+        if "/products/" not in path:
+            return None
+        handle = path.split("/products/")[-1]
+        if not handle or "/" in handle:
+            # keep only the handle segment
+            handle = handle.split("/")[0]
+        js_url = f"{parsed.scheme}://{parsed.netloc}/products/{handle}.js"
+        try:
+            self.rate_limiter.wait(js_url)
+            resp = self.session.get(js_url, timeout=self.config.timeout)
+            if resp.status_code != 200:
+                return None
+            data = resp.json()
+            if isinstance(data, dict) and data.get("variants"):
+                logger.info("Loaded Shopify product.js (%d variants)", len(data["variants"]))
+                return data
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("Shopify product.js fetch failed: %s", exc)
+        return None
+
+    @staticmethod
+    def _prefer_richer_records(
+        primary: list[ProductRecord],
+        secondary: list[ProductRecord],
+    ) -> list[ProductRecord]:
+        """Keep primary when it has specs/options; otherwise merge both."""
+        primary_with_specs = sum(1 for r in primary if r.specifications or (r.raw_specs and len(r.raw_specs) > 2))
+        if primary and (primary_with_specs or any(r.color or r.size for r in primary)):
+            # Merge missing fields from secondary by SKU
+            by_sku = {r.sku: r for r in secondary if r.sku}
+            for rec in primary:
+                other = by_sku.get(rec.sku)
+                if not other:
+                    continue
+                for name in (
+                    "brand",
+                    "description",
+                    "availability",
+                    "image_urls",
+                    "currency",
+                    "product_title",
+                ):
+                    if not getattr(rec, name) and getattr(other, name):
+                        setattr(rec, name, getattr(other, name))
+            return primary
+        return merge_variant_records(primary, secondary)
+
+    @staticmethod
+    def _drop_internal_id_duplicates(records: list[ProductRecord]) -> list[ProductRecord]:
+        """Remove rows whose SKU is only a numeric Shopify id when real SKUs exist for same parent."""
+        real_skus = [r for r in records if r.sku and not r.sku.isdigit()]
+        if not real_skus:
+            return records
+        parents_with_real = {r.parent_product_id for r in real_skus}
+        cleaned = []
+        for r in records:
+            if r.sku and r.sku.isdigit() and r.parent_product_id in parents_with_real:
+                continue
+            cleaned.append(r)
+        return cleaned
 
     def _extract_pipeline(
         self,
@@ -204,13 +290,13 @@ class ProductScraper:
                 if "product" in type_str.lower() or payload.get("variants") or payload.get("sku"):
                     try:
                         if payload.get("variants"):
-                            # Let DOM Shopify helper style handling via jsonld-like expansion
                             from product_scraper.scraper.dom import _records_from_shopify_product
 
-                            records = merge_variant_records(
-                                records,
+                            shopify_recs = attach_specs_to_records(
                                 _records_from_shopify_product(payload, url),
+                                html,
                             )
+                            records = self._prefer_richer_records(shopify_recs, records)
                         else:
                             records = merge_variant_records(
                                 records,
@@ -219,6 +305,7 @@ class ProductScraper:
                     except Exception as exc:  # noqa: BLE001
                         logger.debug("Network payload parse skipped: %s", exc)
 
+        records = attach_specs_to_records(records, html)
         return records
 
     def _enrich_records(
@@ -226,9 +313,17 @@ class ProductScraper:
         primary: list[ProductRecord],
         secondary: list[ProductRecord],
     ) -> list[ProductRecord]:
-        """Fill blank fields on primary records from secondary DOM data."""
+        """Fill blank fields on primary records from secondary DOM data (match by SKU)."""
         if not secondary:
             return primary
+
+        # If secondary has richer variant coverage (Shopify), prefer it
+        sec_specs = sum(1 for r in secondary if r.specifications)
+        pri_specs = sum(1 for r in primary if r.specifications)
+        if len(secondary) >= len(primary) and (sec_specs > pri_specs or any(r.color or r.size for r in secondary)):
+            return self._prefer_richer_records(secondary, primary)
+
+        by_sku = {r.sku: r for r in secondary if r.sku}
         donor = secondary[0]
         fields = (
             "brand",
@@ -244,14 +339,18 @@ class ProductScraper:
             "sku",
         )
         for rec in primary:
+            other = by_sku.get(rec.sku, donor)
             for name in fields:
-                if not getattr(rec, name) and getattr(donor, name):
-                    setattr(rec, name, getattr(donor, name))
-            if not rec.raw_specs and donor.raw_specs:
-                rec.raw_specs = donor.raw_specs
-        # If secondary has more variants (e.g. Shopify), prefer the richer set
-        if len(secondary) > len(primary):
-            return merge_variant_records(secondary, primary)
+                if not getattr(rec, name) and getattr(other, name):
+                    setattr(rec, name, getattr(other, name))
+            if other.raw_specs:
+                merged = dict(rec.raw_specs or {})
+                merged.update({k: v for k, v in other.raw_specs.items() if v})
+                rec.raw_specs = merged
+                if not rec.specifications and merged:
+                    # exclude internal keys from string
+                    public = {k: v for k, v in merged.items() if k not in ("variant_id", "options")}
+                    rec.specifications = specs_to_string(public)
         return primary
 
     def _fetch_with_requests(self, url: str) -> str:
