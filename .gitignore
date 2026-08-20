@@ -12,5 +12,6 @@ data/
 output/
 *.xlsx
 *.log
+*.webp
 .DS_Store
 playwright-report/
