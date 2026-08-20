@@ -199,7 +199,7 @@ class JobManager:
                 self._log(job, f"Deep discovering products from {seed}")
                 result = deep_discover(
                     seed,
-                    max_products=int(opts.get("max_discover", 100)),
+                    max_products=int(opts.get("max_discover", 500)),
                     use_sitemap=bool(opts.get("use_sitemap", True)),
                     use_collections=bool(opts.get("use_collections", True)),
                 )

@@ -36,7 +36,7 @@ class ScrapeRequest(BaseModel):
     timeout: float = 30.0
     discover_from_homepage: bool = False
     deep_crawl: bool = False
-    max_discover: int = 100
+    max_discover: int = Field(default=500, ge=1, le=500)
     use_sitemap: bool = True
     use_collections: bool = True
     workers: int = 2
@@ -51,7 +51,7 @@ class ScrapeRequest(BaseModel):
 
 class DiscoverRequest(BaseModel):
     url: str
-    max_products: int = 100
+    max_products: int = Field(default=500, ge=1, le=500)
     deep: bool = True
     use_sitemap: bool = True
     use_collections: bool = True

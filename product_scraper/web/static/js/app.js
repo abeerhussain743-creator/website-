@@ -88,7 +88,7 @@
         method: "POST",
         body: JSON.stringify({
           url: urls[0],
-          max_products: Number(maxDiscoverEl.value || 50),
+          max_products: Number(maxDiscoverEl.value || 500),
           deep: true,
           use_sitemap: document.getElementById("use-sitemap").checked,
           use_collections: document.getElementById("use-collections").checked,
@@ -145,7 +145,7 @@
           fields,
           discover_from_homepage: discoverEl.checked,
           deep_crawl: deepCrawlEl.checked || discoverEl.checked,
-          max_discover: Number(maxDiscoverEl.value || 50),
+          max_discover: Number(maxDiscoverEl.value || 500),
           use_sitemap: document.getElementById("use-sitemap").checked,
           use_collections: document.getElementById("use-collections").checked,
           workers: Number(workersEl.value || 2),

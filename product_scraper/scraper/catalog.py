@@ -205,7 +205,7 @@ def discover_from_sitemap(
 def deep_discover(
     seed_url: str,
     *,
-    max_products: int = 100,
+    max_products: int = 500,
     use_sitemap: bool = True,
     use_collections: bool = True,
     max_collections: int = 15,
