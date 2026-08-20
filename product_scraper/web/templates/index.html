@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>VariantXL — Product Data Scraper</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Sora:wght@500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/css/app.css" />
+</head>
+<body>
+  <div class="atmosphere" aria-hidden="true"></div>
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <div>
+        <p class="brand-name">VariantXL</p>
+        <p class="brand-tag">SKU-level product harvest</p>
+      </div>
+    </div>
+    <nav class="top-nav">
+      <a href="#workspace">Scrape</a>
+      <a href="#results">Results</a>
+      <a href="#history">History</a>
+    </nav>
+  </header>
+
+  <main id="workspace" class="workspace">
+    <section class="panel compose" aria-labelledby="compose-title">
+      <header class="panel-head">
+        <h1 id="compose-title">Scrape products</h1>
+        <p>Paste product URLs — or a store homepage to discover products — then choose the fields you need.</p>
+      </header>
+
+      <form id="scrape-form" class="compose-form">
+        <label class="field">
+          <span class="label-row">
+            <span>Product URLs</span>
+            <span class="hint">One per line</span>
+          </span>
+          <textarea id="urls" name="urls" rows="7" placeholder="https://floorscenter.com/products/example-plank&#10;https://example.com/products/another-sku" required></textarea>
+        </label>
+
+        <div class="toggle-row">
+          <label class="switch">
+            <input type="checkbox" id="discover" name="discover" />
+            <span>Treat first URL as homepage / collection and auto-find product pages</span>
+          </label>
+          <label class="inline-num">
+            Max discover
+            <input type="number" id="max-discover" value="20" min="1" max="100" />
+          </label>
+        </div>
+
+        <div class="actions-inline">
+          <button type="button" class="btn ghost" id="btn-discover">Preview discovered products</button>
+        </div>
+        <div id="discover-preview" class="discover-preview" hidden></div>
+
+        <fieldset class="fields-block">
+          <legend>
+            <span>Fields to keep</span>
+            <span class="legend-actions">
+              <button type="button" class="linkish" id="select-all-fields">All</button>
+              <button type="button" class="linkish" id="select-core-fields">Core only</button>
+            </span>
+          </legend>
+          <div class="field-grid" id="field-grid">
+            {% for field in fields %}
+            <label class="chip">
+              <input type="checkbox" name="fields" value="{{ field.id }}" {% if field.id in default_fields %}checked{% endif %} {% if field.id == 'sku' %}data-required="1"{% endif %} />
+              <span>{{ field.label }}</span>
+            </label>
+            {% endfor %}
+          </div>
+        </fieldset>
+
+        <details class="advanced">
+          <summary>Scraping options</summary>
+          <div class="advanced-grid">
+            <label class="switch"><input type="checkbox" id="use-browser" checked /><span>Use browser (Playwright)</span></label>
+            <label class="switch"><input type="checkbox" id="interact-variants" checked /><span>Click color / size variants</span></label>
+            <label class="switch"><input type="checkbox" id="respect-robots" checked /><span>Respect robots.txt</span></label>
+            <label class="inline-num">Delay (sec)<input type="number" id="delay" value="1" min="0" max="10" step="0.1" /></label>
+            <label class="inline-num">Timeout (sec)<input type="number" id="timeout" value="30" min="5" max="120" /></label>
+          </div>
+        </details>
+
+        <div class="submit-row">
+          <button type="submit" class="btn primary" id="btn-scrape">
+            <span class="btn-label">Start scrape</span>
+          </button>
+          <p class="submit-note">One Excel row per SKU. Specs, images, and prices included when selected.</p>
+        </div>
+      </form>
+    </section>
+
+    <section class="panel status-panel" aria-labelledby="status-title">
+      <header class="panel-head">
+        <h2 id="status-title">Live job</h2>
+        <p id="status-subtitle">No scrape running yet.</p>
+      </header>
+
+      <div class="progress-block" id="progress-block" hidden>
+        <div class="progress-meta">
+          <span id="progress-label">Queued</span>
+          <span id="progress-pct">0%</span>
+        </div>
+        <div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>
+        <ul class="log-list" id="log-list"></ul>
+      </div>
+
+      <div class="empty-state" id="empty-status">
+        <p>Submit URLs to watch progress, SKU counts, and failures here.</p>
+      </div>
+
+      <div class="job-actions" id="job-actions" hidden>
+        <a class="btn primary" id="btn-xlsx" href="#">Download Excel</a>
+        <a class="btn ghost" id="btn-csv" href="#">Download CSV</a>
+      </div>
+    </section>
+  </main>
+
+  <section id="results" class="results-section panel">
+    <header class="panel-head row">
+      <div>
+        <h2>Results preview</h2>
+        <p id="results-meta">Run a scrape to populate the table.</p>
+      </div>
+      <div class="stat-pills" id="stat-pills" hidden>
+        <span class="pill"><strong id="stat-records">0</strong> SKUs</span>
+        <span class="pill warn"><strong id="stat-failures">0</strong> failures</span>
+      </div>
+    </header>
+    <div class="table-wrap">
+      <table id="results-table">
+        <thead></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div id="failures-box" class="failures-box" hidden>
+      <h3>Failures</h3>
+      <ul id="failures-list"></ul>
+    </div>
+  </section>
+
+  <section id="history" class="history-section panel">
+    <header class="panel-head">
+      <h2>Recent jobs</h2>
+      <p>Re-open a completed scrape to download again.</p>
+    </header>
+    <div class="history-list" id="history-list"></div>
+  </section>
+
+  <footer class="foot">
+    <p><strong>VariantXL</strong> extracts variant-level product data into Excel. Use only on sites you’re allowed to scrape.</p>
+  </footer>
+
+  <script src="/static/js/app.js"></script>
+</body>
+</html>

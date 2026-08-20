@@ -26,6 +26,7 @@ def records_to_dataframe(
     records: list[ProductRecord],
     changed_map: dict[str, set[str]] | None = None,
     split_images: bool = True,
+    columns: list[str] | None = None,
 ) -> pd.DataFrame:
     rows = []
     for rec in records:
@@ -39,15 +40,25 @@ def records_to_dataframe(
             row["changed_fields"] = ", ".join(sorted(changed_fields)) if changed_fields else ""
         rows.append(row)
 
-    base_cols = list(EXCEL_COLUMNS)
-    if split_images:
-        img_cols = [f"image_{i}" for i in range(1, 6)]
-        idx = base_cols.index("image_urls") + 1
-        cols = base_cols[:idx] + img_cols + base_cols[idx:]
+    if columns:
+        # Preserve requested order; keep sku first if present
+        cols = [c for c in columns if c]
+        if split_images and "image_urls" in cols:
+            idx = cols.index("image_urls") + 1
+            img_cols = [f"image_{i}" for i in range(1, 6)]
+            cols = cols[:idx] + img_cols + cols[idx:]
+        if changed_map is not None:
+            cols = cols + ["changed_fields"]
     else:
-        cols = base_cols
-    if changed_map is not None:
-        cols = cols + ["changed_fields"]
+        base_cols = list(EXCEL_COLUMNS)
+        if split_images:
+            img_cols = [f"image_{i}" for i in range(1, 6)]
+            idx = base_cols.index("image_urls") + 1
+            cols = base_cols[:idx] + img_cols + base_cols[idx:]
+        else:
+            cols = base_cols
+        if changed_map is not None:
+            cols = cols + ["changed_fields"]
 
     df = pd.DataFrame(rows)
     for col in cols:
@@ -62,6 +73,7 @@ def export_excel(
     failures: list[ScrapeFailure] | None = None,
     changed_map: dict[str, set[str]] | None = None,
     include_raw_specs: bool = True,
+    columns: list[str] | None = None,
 ) -> Path:
     """
     Write a downloadable .xlsx with:
@@ -73,7 +85,7 @@ def export_excel(
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    df = records_to_dataframe(records, changed_map=changed_map)
+    df = records_to_dataframe(records, changed_map=changed_map, columns=columns)
     wb = Workbook()
 
     ws = wb.active

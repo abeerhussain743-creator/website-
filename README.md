@@ -23,6 +23,23 @@ pip install -e .
 playwright install chromium
 ```
 
+## Web dashboard
+
+Launch a browser UI to paste URLs, pick fields, run scrapes, and download Excel:
+
+```bash
+product-scraper dashboard
+# open http://127.0.0.1:8000/
+```
+
+Features:
+- Multi-URL input or homepage product discovery
+- Choose which fields to keep (brand, specs, price, images, …)
+- Live job progress + logs
+- Results table preview
+- Download `.xlsx` / `.csv`
+- Recent job history
+
 ## Usage
 
 ### Scrape product URLs

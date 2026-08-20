@@ -228,6 +228,27 @@ def run_due_cmd(output: str, history_db: str, no_browser: bool, verbose: bool) -
     _print_summary(result.records, result.failures, out, changed_map)
 
 
+@main.command("dashboard")
+@click.option("--host", default="127.0.0.1", show_default=True)
+@click.option("--port", default=8000, show_default=True, type=int)
+@click.option("--reload", is_flag=True, help="Auto-reload on code changes (dev).")
+def dashboard_cmd(host: str, port: int, reload: bool) -> None:
+    """Launch the VariantXL web dashboard."""
+    try:
+        import uvicorn
+    except ImportError as exc:  # pragma: no cover
+        console.print("[red]Install dashboard deps: pip install fastapi uvicorn jinja2 python-multipart[/red]")
+        raise SystemExit(1) from exc
+
+    console.print(f"[bold]VariantXL dashboard[/bold] → http://{host}:{port}/")
+    uvicorn.run(
+        "product_scraper.web.app:app",
+        host=host,
+        port=port,
+        reload=reload,
+    )
+
+
 def _print_summary(records, failures, output_path, changed_map=None) -> None:
     table = Table(title="Scrape Summary")
     table.add_column("Metric")
