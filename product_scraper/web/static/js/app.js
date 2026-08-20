@@ -2,7 +2,9 @@
   const form = document.getElementById("scrape-form");
   const urlsEl = document.getElementById("urls");
   const discoverEl = document.getElementById("discover");
+  const deepCrawlEl = document.getElementById("deep-crawl");
   const maxDiscoverEl = document.getElementById("max-discover");
+  const workersEl = document.getElementById("workers");
   const btnDiscover = document.getElementById("btn-discover");
   const discoverPreview = document.getElementById("discover-preview");
   const btnScrape = document.getElementById("btn-scrape");
@@ -15,6 +17,8 @@
   const jobActions = document.getElementById("job-actions");
   const btnXlsx = document.getElementById("btn-xlsx");
   const btnCsv = document.getElementById("btn-csv");
+  const btnJson = document.getElementById("btn-json");
+  const btnImages = document.getElementById("btn-images");
   const statusSubtitle = document.getElementById("status-subtitle");
   const resultsMeta = document.getElementById("results-meta");
   const resultsTable = document.getElementById("results-table");
@@ -24,25 +28,24 @@
   const failuresBox = document.getElementById("failures-box");
   const failuresList = document.getElementById("failures-list");
   const historyList = document.getElementById("history-list");
+  const summaryCards = document.getElementById("summary-cards");
+  const tableFilter = document.getElementById("table-filter");
 
+  const PRESETS = window.VARIANTXL_PRESETS || {};
   let pollTimer = null;
-  let activeJobId = null;
+  let latestRows = [];
+  let latestFields = [];
 
-  const CORE_FIELDS = ["brand", "product_title", "sku", "color", "size", "price", "currency", "specifications", "availability", "source_url"];
-
-  document.getElementById("select-all-fields").addEventListener("click", () => {
-    document.querySelectorAll('#field-grid input[type="checkbox"]').forEach((el) => {
-      el.checked = true;
+  document.querySelectorAll("[data-preset]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const key = btn.dataset.preset;
+      const fields = PRESETS[key] || [];
+      document.querySelectorAll('#field-grid input[type="checkbox"]').forEach((el) => {
+        el.checked = fields.includes(el.value) || el.dataset.required === "1";
+      });
     });
   });
 
-  document.getElementById("select-core-fields").addEventListener("click", () => {
-    document.querySelectorAll('#field-grid input[type="checkbox"]').forEach((el) => {
-      el.checked = CORE_FIELDS.includes(el.value) || el.dataset.required === "1";
-    });
-  });
-
-  // Keep SKU always selected
   document.querySelectorAll('#field-grid input[data-required="1"]').forEach((el) => {
     el.addEventListener("change", () => {
       el.checked = true;
@@ -75,7 +78,7 @@
   btnDiscover.addEventListener("click", async () => {
     const urls = parseUrls();
     if (!urls.length) {
-      alert("Paste a homepage or collection URL first.");
+      alert("Paste a store or collection URL first.");
       return;
     }
     btnDiscover.disabled = true;
@@ -85,19 +88,26 @@
         method: "POST",
         body: JSON.stringify({
           url: urls[0],
-          max_products: Number(maxDiscoverEl.value || 20),
+          max_products: Number(maxDiscoverEl.value || 50),
+          deep: true,
+          use_sitemap: document.getElementById("use-sitemap").checked,
+          use_collections: document.getElementById("use-collections").checked,
         }),
       });
       discoverPreview.hidden = false;
       if (!data.products.length) {
-        discoverPreview.innerHTML = `<strong>No product links found</strong> on that page.`;
+        discoverPreview.innerHTML = `<strong>No product links found</strong>`;
       } else {
+        const src = data.sources || {};
         discoverPreview.innerHTML = `
           <strong>Found ${data.count} product page(s)</strong>
-          <ol>${data.products.map((u) => `<li><a href="${u}" target="_blank" rel="noopener">${u}</a></li>`).join("")}</ol>
-          <p style="margin:0.6rem 0 0;color:var(--ink-muted)">Enable “auto-find product pages” and start scrape to use these.</p>`;
-        // Optionally fill textarea with discovered URLs when discover toggle is on
-        if (discoverEl.checked) {
+          <div style="margin-top:0.35rem;color:var(--ink-muted)">
+            Sources — HTML: ${src.html || 0}, Collections: ${src.collections_json || 0}, Sitemap: ${src.sitemap || 0}
+            · Collections crawled: ${(data.collections || []).length}
+          </div>
+          <ol>${data.products.slice(0, 30).map((u) => `<li><a href="${u}" target="_blank" rel="noopener">${u}</a></li>`).join("")}</ol>
+          ${data.count > 30 ? `<p style="color:var(--ink-muted)">…and ${data.count - 30} more</p>` : ""}`;
+        if (discoverEl.checked || deepCrawlEl.checked) {
           urlsEl.value = data.products.join("\n");
         }
       }
@@ -105,7 +115,7 @@
       alert(err.message);
     } finally {
       btnDiscover.disabled = false;
-      btnDiscover.textContent = "Preview discovered products";
+      btnDiscover.textContent = "Preview deep discovery";
     }
   });
 
@@ -124,7 +134,8 @@
     jobActions.hidden = true;
     emptyStatus.hidden = true;
     progressBlock.hidden = false;
-    statusSubtitle.textContent = "Scraping in progress…";
+    summaryCards.hidden = true;
+    statusSubtitle.textContent = "Power scrape in progress…";
 
     try {
       const job = await api("/api/scrape", {
@@ -133,22 +144,32 @@
           urls,
           fields,
           discover_from_homepage: discoverEl.checked,
-          max_discover: Number(maxDiscoverEl.value || 20),
+          deep_crawl: deepCrawlEl.checked || discoverEl.checked,
+          max_discover: Number(maxDiscoverEl.value || 50),
+          use_sitemap: document.getElementById("use-sitemap").checked,
+          use_collections: document.getElementById("use-collections").checked,
+          workers: Number(workersEl.value || 2),
           use_browser: document.getElementById("use-browser").checked,
           interact_variants: document.getElementById("interact-variants").checked,
           respect_robots: document.getElementById("respect-robots").checked,
           delay: Number(document.getElementById("delay").value || 1),
           timeout: Number(document.getElementById("timeout").value || 30),
+          min_price: document.getElementById("min-price").value || null,
+          max_price: document.getElementById("max-price").value || null,
+          in_stock_only: document.getElementById("in-stock-only").checked,
+          brand_contains: document.getElementById("brand-contains").value || "",
+          query: document.getElementById("query").value || "",
+          download_images: document.getElementById("download-images").checked,
+          max_images: 3,
         }),
       });
-      activeJobId = job.id;
       renderJob(job);
       startPolling(job.id);
       refreshHistory();
     } catch (err) {
       alert(err.message);
       btnScrape.disabled = false;
-      btnScrape.querySelector(".btn-label").textContent = "Start scrape";
+      btnScrape.querySelector(".btn-label").textContent = "Start powerful scrape";
     }
   });
 
@@ -162,13 +183,30 @@
           clearInterval(pollTimer);
           pollTimer = null;
           btnScrape.disabled = false;
-          btnScrape.querySelector(".btn-label").textContent = "Start scrape";
+          btnScrape.querySelector(".btn-label").textContent = "Start powerful scrape";
           refreshHistory();
         }
-      } catch (_) {
-        /* ignore transient errors */
-      }
-    }, 1200);
+      } catch (_) {}
+    }, 1000);
+  }
+
+  function renderSummary(summary) {
+    if (!summary || !summary.record_count) {
+      summaryCards.hidden = true;
+      return;
+    }
+    summaryCards.hidden = false;
+    const price =
+      summary.price_min != null
+        ? `$${summary.price_min}–$${summary.price_max}`
+        : "—";
+    summaryCards.innerHTML = `
+      <div class="summary-card"><strong>${summary.record_count}</strong><span>SKU rows</span></div>
+      <div class="summary-card"><strong>${summary.brand_count}</strong><span>Brands</span></div>
+      <div class="summary-card"><strong>${summary.with_specs}</strong><span>With specs</span></div>
+      <div class="summary-card"><strong>${summary.with_images}</strong><span>With images</span></div>
+      <div class="summary-card"><strong>${escapeHtml(price)}</strong><span>Price range</span></div>
+    `;
   }
 
   function renderJob(job) {
@@ -176,15 +214,24 @@
     progressFill.style.width = `${pct}%`;
     progressPct.textContent = `${pct}%`;
     progressLabel.textContent = job.message || job.status;
-    statusSubtitle.textContent = `Job ${job.id} · ${job.status}`;
+    statusSubtitle.textContent = `Job ${job.id} · ${job.status}` +
+      (job.discovered_count ? ` · discovered ${job.discovered_count}` : "");
 
     logList.innerHTML = (job.logs || []).map((line) => `<li>${escapeHtml(line)}</li>`).join("");
     logList.scrollTop = logList.scrollHeight;
+    renderSummary(job.summary);
 
     if (job.status === "completed") {
       jobActions.hidden = false;
       btnXlsx.href = `/api/jobs/${job.id}/download.xlsx`;
       btnCsv.href = `/api/jobs/${job.id}/download.csv`;
+      btnJson.href = `/api/jobs/${job.id}/download.json`;
+      if (job.images_zip) {
+        btnImages.hidden = false;
+        btnImages.href = `/api/jobs/${job.id}/download.images.zip`;
+      } else {
+        btnImages.hidden = true;
+      }
       renderResults(job);
     } else if (job.status === "failed") {
       resultsMeta.textContent = job.message || "Scrape failed.";
@@ -192,21 +239,15 @@
   }
 
   function renderResults(job) {
-    const fields = job.fields || [];
-    const rows = job.preview || [];
+    latestFields = job.fields || [];
+    latestRows = job.preview || [];
     statPills.hidden = false;
     statRecords.textContent = String(job.record_count || 0);
     statFailures.textContent = String(job.failure_count || 0);
-    resultsMeta.textContent = rows.length
-      ? `Showing ${Math.min(rows.length, 50)} of ${job.record_count} SKU row(s).`
+    resultsMeta.textContent = latestRows.length
+      ? `Showing ${Math.min(latestRows.length, 100)} of ${job.record_count} SKU row(s).`
       : "No product rows returned.";
-
-    const thead = resultsTable.querySelector("thead");
-    const tbody = resultsTable.querySelector("tbody");
-    thead.innerHTML = `<tr>${fields.map((f) => `<th>${escapeHtml(f)}</th>`).join("")}</tr>`;
-    tbody.innerHTML = rows
-      .map((row) => `<tr>${fields.map((f) => `<td title="${escapeAttr(row[f] || "")}">${escapeHtml(String(row[f] ?? ""))}</td>`).join("")}</tr>`)
-      .join("");
+    paintTable(latestFields, latestRows);
 
     if (job.failures && job.failures.length) {
       failuresBox.hidden = false;
@@ -218,6 +259,21 @@
       failuresList.innerHTML = "";
     }
   }
+
+  function paintTable(fields, rows) {
+    const q = (tableFilter.value || "").trim().toLowerCase();
+    const filtered = q
+      ? rows.filter((row) => fields.some((f) => String(row[f] ?? "").toLowerCase().includes(q)))
+      : rows;
+    const thead = resultsTable.querySelector("thead");
+    const tbody = resultsTable.querySelector("tbody");
+    thead.innerHTML = `<tr>${fields.map((f) => `<th>${escapeHtml(f)}</th>`).join("")}</tr>`;
+    tbody.innerHTML = filtered
+      .map((row) => `<tr>${fields.map((f) => `<td title="${escapeAttr(row[f] || "")}">${escapeHtml(String(row[f] ?? ""))}</td>`).join("")}</tr>`)
+      .join("");
+  }
+
+  tableFilter.addEventListener("input", () => paintTable(latestFields, latestRows));
 
   async function refreshHistory() {
     try {
@@ -244,7 +300,6 @@
       historyList.querySelectorAll("button[data-job]").forEach((btn) => {
         btn.addEventListener("click", async () => {
           const job = await api(`/api/jobs/${btn.dataset.job}`);
-          activeJobId = job.id;
           emptyStatus.hidden = true;
           progressBlock.hidden = false;
           renderJob(job);

@@ -23,22 +23,22 @@ pip install -e .
 playwright install chromium
 ```
 
-## Web dashboard
+## Web dashboard (VariantXL Pro)
 
-Launch a browser UI to paste URLs, pick fields, run scrapes, and download Excel:
+Launch a browser UI to paste URLs, deep-crawl stores, pick fields, filter results, and download Excel:
 
 ```bash
 product-scraper dashboard
 # open http://127.0.0.1:8000/
 ```
 
-Features:
-- Multi-URL input or homepage product discovery
-- Choose which fields to keep (brand, specs, price, images, …)
-- Live job progress + logs
-- Results table preview
-- Download `.xlsx` / `.csv`
-- Recent job history
+Power features:
+- **Deep crawl** — sitemap.xml + Shopify collections JSON + pagination
+- **Parallel workers** — scrape many product pages concurrently
+- **Field presets** — Core / Commerce / Full
+- **Filters** — min/max price, brand, in-stock, text search
+- **Exports** — Excel, CSV, JSON, optional images ZIP
+- Live job progress, summary cards, results table filter, job history
 
 ## Usage
 

@@ -4,18 +4,20 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
-from urllib.parse import urljoin, urlparse
 
-import requests
-from bs4 import BeautifulSoup
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
 
-from product_scraper.compliance.robots import USER_AGENT
-from product_scraper.web.jobs import AVAILABLE_FIELDS, DEFAULT_FIELDS, job_manager
+from product_scraper.scraper.catalog import deep_discover
+from product_scraper.web.jobs import (
+    AVAILABLE_FIELDS,
+    DEFAULT_FIELDS,
+    FIELD_PRESETS,
+    job_manager,
+)
 
 WEB_DIR = Path(__file__).resolve().parent
 TEMPLATES = Jinja2Templates(directory=str(WEB_DIR / "templates"))
@@ -33,12 +35,26 @@ class ScrapeRequest(BaseModel):
     delay: float = 1.0
     timeout: float = 30.0
     discover_from_homepage: bool = False
-    max_discover: int = 25
+    deep_crawl: bool = False
+    max_discover: int = 100
+    use_sitemap: bool = True
+    use_collections: bool = True
+    workers: int = 2
+    min_price: float | None = None
+    max_price: float | None = None
+    in_stock_only: bool = False
+    brand_contains: str = ""
+    query: str = ""
+    download_images: bool = False
+    max_images: int = 3
 
 
 class DiscoverRequest(BaseModel):
     url: str
-    max_products: int = 25
+    max_products: int = 100
+    deep: bool = True
+    use_sitemap: bool = True
+    use_collections: bool = True
 
 
 def create_app() -> FastAPI:
@@ -53,13 +69,14 @@ async def index(request: Request) -> HTMLResponse:
         {
             "fields": AVAILABLE_FIELDS,
             "default_fields": DEFAULT_FIELDS,
+            "presets": FIELD_PRESETS,
         },
     )
 
 
 @app.get("/api/fields")
 async def api_fields() -> dict[str, Any]:
-    return {"fields": AVAILABLE_FIELDS, "defaults": DEFAULT_FIELDS}
+    return {"fields": AVAILABLE_FIELDS, "defaults": DEFAULT_FIELDS, "presets": FIELD_PRESETS}
 
 
 @app.get("/api/jobs")
@@ -78,11 +95,6 @@ async def api_job(job_id: str) -> dict[str, Any]:
 @app.post("/api/scrape")
 async def api_scrape(body: ScrapeRequest) -> dict[str, Any]:
     urls = list(body.urls)
-    if body.discover_from_homepage and urls:
-        discovered = discover_product_urls(urls[0], max_products=body.max_discover)
-        # Keep homepage seed out; use discovered product pages
-        urls = discovered or urls
-
     try:
         job = job_manager.create_job(
             urls=urls,
@@ -93,6 +105,19 @@ async def api_scrape(body: ScrapeRequest) -> dict[str, Any]:
                 "respect_robots": body.respect_robots,
                 "delay": body.delay,
                 "timeout": body.timeout,
+                "discover_from_homepage": body.discover_from_homepage,
+                "deep_crawl": body.deep_crawl or body.discover_from_homepage,
+                "max_discover": body.max_discover,
+                "use_sitemap": body.use_sitemap,
+                "use_collections": body.use_collections,
+                "workers": body.workers,
+                "min_price": body.min_price,
+                "max_price": body.max_price,
+                "in_stock_only": body.in_stock_only,
+                "brand_contains": body.brand_contains,
+                "query": body.query,
+                "download_images": body.download_images,
+                "max_images": body.max_images,
             },
         )
     except ValueError as exc:
@@ -103,75 +128,71 @@ async def api_scrape(body: ScrapeRequest) -> dict[str, Any]:
 @app.post("/api/discover")
 async def api_discover(body: DiscoverRequest) -> dict[str, Any]:
     try:
-        products = discover_product_urls(body.url, max_products=body.max_products)
+        if body.deep:
+            result = deep_discover(
+                body.url,
+                max_products=body.max_products,
+                use_sitemap=body.use_sitemap,
+                use_collections=body.use_collections,
+            )
+            return {
+                "url": body.url,
+                "count": result["count"],
+                "products": result["products"],
+                "collections": result.get("collections") or [],
+                "sources": result.get("sources") or {},
+                "deep": True,
+            }
+        # Shallow fallback
+        result = deep_discover(
+            body.url,
+            max_products=body.max_products,
+            use_sitemap=False,
+            use_collections=False,
+        )
+        return {
+            "url": body.url,
+            "count": result["count"],
+            "products": result["products"],
+            "collections": [],
+            "sources": result.get("sources") or {},
+            "deep": False,
+        }
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return {"url": body.url, "count": len(products), "products": products}
+
+
+def _file_response(job_id: str, attr: str, media: str, filename: str) -> FileResponse:
+    job = job_manager.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    path_str = getattr(job, attr, "") or ""
+    path = Path(path_str)
+    if not path_str or not path.exists():
+        raise HTTPException(status_code=404, detail="File not ready")
+    return FileResponse(path, media_type=media, filename=filename)
 
 
 @app.get("/api/jobs/{job_id}/download.xlsx")
 async def download_xlsx(job_id: str) -> FileResponse:
-    job = job_manager.get(job_id)
-    if not job or not job.excel_path:
-        raise HTTPException(status_code=404, detail="Excel not ready")
-    path = Path(job.excel_path)
-    if not path.exists():
-        raise HTTPException(status_code=404, detail="Excel file missing")
-    return FileResponse(
-        path,
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        filename=f"variantxl_{job_id}.xlsx",
+    return _file_response(
+        job_id,
+        "excel_path",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        f"variantxl_{job_id}.xlsx",
     )
 
 
 @app.get("/api/jobs/{job_id}/download.csv")
 async def download_csv(job_id: str) -> FileResponse:
-    job = job_manager.get(job_id)
-    if not job or not job.csv_path:
-        raise HTTPException(status_code=404, detail="CSV not ready")
-    path = Path(job.csv_path)
-    if not path.exists():
-        raise HTTPException(status_code=404, detail="CSV file missing")
-    return FileResponse(path, media_type="text/csv", filename=f"variantxl_{job_id}.csv")
+    return _file_response(job_id, "csv_path", "text/csv", f"variantxl_{job_id}.csv")
 
 
-def discover_product_urls(page_url: str, max_products: int = 25) -> list[str]:
-    """Find product links on a homepage or collection page."""
-    page_url = page_url.strip()
-    if not page_url.startswith(("http://", "https://")):
-        page_url = "https://" + page_url
+@app.get("/api/jobs/{job_id}/download.json")
+async def download_json(job_id: str) -> FileResponse:
+    return _file_response(job_id, "json_path", "application/json", f"variantxl_{job_id}.json")
 
-    resp = requests.get(
-        page_url,
-        headers={"User-Agent": USER_AGENT, "Accept": "text/html"},
-        timeout=30,
-    )
-    resp.raise_for_status()
-    soup = BeautifulSoup(resp.text, "lxml")
-    host = urlparse(page_url).netloc
 
-    found: list[str] = []
-    seen: set[str] = set()
-    for a in soup.find_all("a", href=True):
-        href = urljoin(page_url, a["href"]).split("?")[0].split("#")[0]
-        parsed = urlparse(href)
-        if parsed.netloc and parsed.netloc != host:
-            continue
-        path = parsed.path
-        if "/products/" not in path and "/product/" not in path:
-            continue
-        # Normalize Shopify-style collection nested paths → /products/handle
-        if "/products/" in path:
-            handle = path.split("/products/")[-1].strip("/")
-            if not handle or "/" in handle:
-                handle = handle.split("/")[0]
-            canon = f"{parsed.scheme}://{parsed.netloc}/products/{handle}"
-        else:
-            canon = f"{parsed.scheme}://{parsed.netloc}{path}".rstrip("/")
-        if canon in seen:
-            continue
-        seen.add(canon)
-        found.append(canon)
-        if len(found) >= max_products:
-            break
-    return found
+@app.get("/api/jobs/{job_id}/download.images.zip")
+async def download_images_zip(job_id: str) -> FileResponse:
+    return _file_response(job_id, "images_zip", "application/zip", f"variantxl_{job_id}_images.zip")

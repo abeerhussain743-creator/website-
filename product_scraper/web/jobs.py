@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import csv
+import json
 import threading
 import uuid
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
@@ -13,7 +16,10 @@ from typing import Any
 from product_scraper.export.excel import export_excel
 from product_scraper.models import ProductRecord, ScrapeFailure
 from product_scraper.refresh.history import ScrapeHistory
+from product_scraper.scraper.catalog import deep_discover
 from product_scraper.scraper.engine import ProductScraper, ScraperConfig
+from product_scraper.scraper.filters import filter_records, summarize_records
+from product_scraper.scraper.images import download_images
 
 
 class JobStatus(str, Enum):
@@ -42,6 +48,24 @@ AVAILABLE_FIELDS = [
 
 DEFAULT_FIELDS = [f["id"] for f in AVAILABLE_FIELDS]
 
+FIELD_PRESETS = {
+    "core": ["sku", "brand", "product_title", "color", "size", "price", "currency", "availability", "source_url"],
+    "commerce": [
+        "sku",
+        "brand",
+        "product_title",
+        "color",
+        "size",
+        "price",
+        "currency",
+        "availability",
+        "specifications",
+        "image_urls",
+        "source_url",
+    ],
+    "full": list(DEFAULT_FIELDS),
+}
+
 
 @dataclass
 class ScrapeJob:
@@ -60,8 +84,12 @@ class ScrapeJob:
     failures: list[dict[str, str]] = field(default_factory=list)
     excel_path: str = ""
     csv_path: str = ""
+    json_path: str = ""
+    images_zip: str = ""
     options: dict[str, Any] = field(default_factory=dict)
     logs: list[str] = field(default_factory=list)
+    summary: dict[str, Any] = field(default_factory=dict)
+    discovered_count: int = 0
 
     def __post_init__(self) -> None:
         if not self.created_at:
@@ -80,12 +108,16 @@ class ScrapeJob:
             "progress": self.progress,
             "record_count": self.record_count,
             "failure_count": self.failure_count,
-            "failures": self.failures,
+            "failures": self.failures[:50],
             "excel_path": self.excel_path,
             "csv_path": self.csv_path,
+            "json_path": self.json_path,
+            "images_zip": self.images_zip,
             "options": self.options,
-            "logs": self.logs[-40:],
-            "preview": self.records[:50],
+            "logs": self.logs[-60:],
+            "preview": self.records[:100],
+            "summary": self.summary,
+            "discovered_count": self.discovered_count,
         }
 
 
@@ -155,82 +187,149 @@ class JobManager:
             return
         job.status = JobStatus.RUNNING
         job.started_at = datetime.now(timezone.utc).isoformat()
-        job.progress = 0.05
-        self._log(job, f"Starting scrape for {len(job.urls)} URL(s)")
-
+        job.progress = 0.02
         opts = job.options
-        config = ScraperConfig(
-            timeout=float(opts.get("timeout", 30)),
-            rate_limit_delay=float(opts.get("delay", 1.0)),
-            respect_robots=bool(opts.get("respect_robots", True)),
-            use_playwright=bool(opts.get("use_browser", True)),
-            interact_variants=bool(opts.get("interact_variants", True)) and bool(opts.get("use_browser", True)),
-            headless=True,
-        )
-
-        all_records: list[ProductRecord] = []
-        all_failures: list[ScrapeFailure] = []
 
         try:
-            with ProductScraper(config) as scraper:
-                total = len(job.urls)
-                for idx, url in enumerate(job.urls):
-                    self._log(job, f"Scraping ({idx + 1}/{total}): {url}")
+            urls = list(job.urls)
+
+            # Deep catalog discovery
+            if opts.get("deep_crawl") or opts.get("discover_from_homepage"):
+                seed = urls[0]
+                self._log(job, f"Deep discovering products from {seed}")
+                result = deep_discover(
+                    seed,
+                    max_products=int(opts.get("max_discover", 100)),
+                    use_sitemap=bool(opts.get("use_sitemap", True)),
+                    use_collections=bool(opts.get("use_collections", True)),
+                )
+                discovered = result.get("products") or []
+                job.discovered_count = len(discovered)
+                self._log(
+                    job,
+                    f"Discovered {len(discovered)} product URL(s) "
+                    f"(html={result['sources'].get('html', 0)}, "
+                    f"collections={result['sources'].get('collections_json', 0)}, "
+                    f"sitemap={result['sources'].get('sitemap', 0)})",
+                )
+                if discovered:
+                    urls = discovered
+                    job.urls = urls
+                job.progress = 0.08
+
+            workers = max(1, min(8, int(opts.get("workers", 1))))
+            self._log(job, f"Starting scrape — {len(urls)} URL(s), {workers} worker(s)")
+
+            config = ScraperConfig(
+                timeout=float(opts.get("timeout", 30)),
+                rate_limit_delay=float(opts.get("delay", 1.0)),
+                respect_robots=bool(opts.get("respect_robots", True)),
+                use_playwright=bool(opts.get("use_browser", True)),
+                interact_variants=bool(opts.get("interact_variants", True))
+                and bool(opts.get("use_browser", True)),
+                headless=True,
+            )
+
+            all_records: list[ProductRecord] = []
+            all_failures: list[ScrapeFailure] = []
+            total = max(1, len(urls))
+            done = 0
+            lock = threading.Lock()
+
+            def scrape_one(url: str) -> tuple[list[ProductRecord], list[ScrapeFailure], str]:
+                # Each worker gets its own scraper (Playwright is not thread-safe on one browser)
+                with ProductScraper(config) as scraper:
                     try:
                         result = scraper.scrape_url(url)
-                        all_records.extend(result.records)
-                        all_failures.extend(result.failures)
-                        self._log(
-                            job,
-                            f"→ {len(result.records)} SKU row(s), {len(result.failures)} failure(s)",
-                        )
+                        return result.records, result.failures, ""
                     except Exception as exc:  # noqa: BLE001
-                        all_failures.append(ScrapeFailure(url=url, reason=str(exc)))
-                        self._log(job, f"→ error: {exc}")
-                    job.progress = min(0.9, (idx + 1) / total * 0.9)
-                    job.record_count = len(all_records)
-                    job.failure_count = len(all_failures)
+                        return [], [ScrapeFailure(url=url, reason=str(exc))], str(exc)
 
-            # Filter columns for preview / export payload
-            filtered_rows = []
-            for rec in all_records:
-                row = rec.to_dict()
-                filtered = {k: row.get(k, "") for k in job.fields}
-                # Always keep raw_specs for Raw Specs sheet if specifications requested
-                if "specifications" in job.fields:
-                    filtered["raw_specs"] = row.get("raw_specs") or {}
-                filtered_rows.append(filtered)
+            with ThreadPoolExecutor(max_workers=workers) as pool:
+                futures = {pool.submit(scrape_one, url): url for url in urls}
+                for fut in as_completed(futures):
+                    url = futures[fut]
+                    records, failures, err = fut.result()
+                    with lock:
+                        all_records.extend(records)
+                        all_failures.extend(failures)
+                        done += 1
+                        job.progress = 0.08 + (done / total) * 0.75
+                        job.record_count = len(all_records)
+                        job.failure_count = len(all_failures)
+                        if err:
+                            self._log(job, f"[{done}/{total}] error {url}: {err}")
+                        else:
+                            self._log(
+                                job,
+                                f"[{done}/{total}] {url} → {len(records)} SKU(s), {len(failures)} fail(s)",
+                            )
 
-            excel_name = f"scrape_{job.id}.xlsx"
-            excel_path = self.output_dir / excel_name
-            # Export full records but only selected columns in Products sheet via filter
-            export_records = all_records
+            # Filters
+            before = len(all_records)
+            all_records = filter_records(
+                all_records,
+                min_price=_float_or_none(opts.get("min_price")),
+                max_price=_float_or_none(opts.get("max_price")),
+                in_stock_only=bool(opts.get("in_stock_only", False)),
+                brand_contains=str(opts.get("brand_contains") or ""),
+                query=str(opts.get("query") or ""),
+            )
+            if before != len(all_records):
+                self._log(job, f"Filters applied: {before} → {len(all_records)} row(s)")
+
+            job.progress = 0.9
+            job.summary = summarize_records(all_records)
+
+            job_dir = self.output_dir / job.id
+            job_dir.mkdir(parents=True, exist_ok=True)
+
+            excel_path = job_dir / f"scrape_{job.id}.xlsx"
             export_excel(
-                export_records,
+                all_records,
                 excel_path,
                 failures=all_failures,
                 include_raw_specs="specifications" in job.fields,
                 columns=job.fields,
             )
-            # Also write a fields-filtered CSV for quick download
-            import csv
 
-            csv_path = self.output_dir / f"scrape_{job.id}.csv"
+            csv_path = job_dir / f"scrape_{job.id}.csv"
             with csv_path.open("w", newline="", encoding="utf-8") as fh:
                 writer = csv.DictWriter(fh, fieldnames=job.fields, extrasaction="ignore")
                 writer.writeheader()
                 for rec in all_records:
                     writer.writerow({k: getattr(rec, k, "") or "" for k in job.fields})
 
+            json_path = job_dir / f"scrape_{job.id}.json"
+            json_path.write_text(
+                json.dumps(
+                    {
+                        "job_id": job.id,
+                        "summary": job.summary,
+                        "records": [{k: getattr(r, k, "") or "" for k in job.fields} for r in all_records],
+                        "failures": [{"url": f.url, "reason": f.reason} for f in all_failures],
+                    },
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+
+            if opts.get("download_images"):
+                self._log(job, "Downloading product images…")
+                try:
+                    zip_path = download_images(all_records, job_dir, max_per_sku=int(opts.get("max_images", 3)))
+                    job.images_zip = str(zip_path)
+                    self._log(job, f"Images zipped → {zip_path.name}")
+                except Exception as exc:  # noqa: BLE001
+                    self._log(job, f"Image download skipped: {exc}")
+
             self.history.save_run(job.id, all_records)
 
-            job.records = [
-                {k: (getattr(r, k, "") or "") for k in job.fields}
-                for r in all_records
-            ]
+            job.records = [{k: (getattr(r, k, "") or "") for k in job.fields} for r in all_records]
             job.failures = [{"url": f.url, "reason": f.reason} for f in all_failures]
             job.excel_path = str(excel_path)
             job.csv_path = str(csv_path)
+            job.json_path = str(json_path)
             job.record_count = len(all_records)
             job.failure_count = len(all_failures)
             job.progress = 1.0
@@ -244,5 +343,13 @@ class JobManager:
             self._log(job, f"Job failed: {exc}")
 
 
-# Singleton used by the web app
+def _float_or_none(value: Any) -> float | None:
+    if value is None or value == "":
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
 job_manager = JobManager()
