@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <title>Oak Timber Plank – Sample Store</title>
+  <meta property="og:title" content="Oak Timber Plank"/>
+  <meta property="og:description" content="Premium engineered oak timber plank flooring."/>
+  <meta property="og:image" content="https://cdn.example.com/oak-black-1.jpg"/>
+  <meta property="product:brand" content="Nordic Floors"/>
+  <meta property="product:price:amount" content="89.00"/>
+  <meta property="product:price:currency" content="USD"/>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "ProductGroup",
+    "name": "Oak Timber Plank",
+    "brand": {"@type": "Brand", "name": "Nordic Floors"},
+    "description": "Premium engineered oak timber plank flooring.",
+    "productGroupID": "OTP-PARENT",
+    "variesBy": ["https://schema.org/color", "https://schema.org/size"],
+    "hasVariant": [
+      {
+        "@type": "Product",
+        "name": "Oak Timber Plank – Black",
+        "sku": "OTP-BLK-120",
+        "color": "Black",
+        "size": "120x20cm",
+        "image": [
+          "https://cdn.example.com/oak-black-1.jpg",
+          "https://cdn.example.com/oak-black-2.jpg"
+        ],
+        "offers": {
+          "@type": "Offer",
+          "price": "89.00",
+          "priceCurrency": "USD",
+          "availability": "https://schema.org/InStock"
+        },
+        "additionalProperty": [
+          {"@type": "PropertyValue", "name": "Material", "value": "Oak"},
+          {"@type": "PropertyValue", "name": "Finish", "value": "Matte"}
+        ]
+      },
+      {
+        "@type": "Product",
+        "name": "Oak Timber Plank – Gray",
+        "sku": "OTP-GRY-120",
+        "color": "Gray",
+        "size": "120x20cm",
+        "image": [
+          "https://cdn.example.com/oak-gray-1.jpg",
+          "https://cdn.example.com/oak-gray-2.jpg"
+        ],
+        "offers": {
+          "@type": "Offer",
+          "price": "92.00",
+          "priceCurrency": "USD",
+          "availability": "https://schema.org/InStock"
+        },
+        "additionalProperty": [
+          {"@type": "PropertyValue", "name": "Material", "value": "Oak"},
+          {"@type": "PropertyValue", "name": "Finish", "value": "Matte"}
+        ]
+      }
+    ]
+  }
+  </script>
+</head>
+<body>
+  <h1 class="product-title">Oak Timber Plank</h1>
+  <div class="product-brand">Nordic Floors</div>
+  <div class="product-description">Premium engineered oak timber plank flooring.</div>
+  <div class="price">$89.00</div>
+  <table class="product-specs">
+    <tr><th>Material</th><td>Oak</td></tr>
+    <tr><th>Finish</th><td>Matte</td></tr>
+  </table>
+</body>
+</html>

@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>VariantXL Pro — Product Data Scraper</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Sora:wght@500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/css/app.css" />
+</head>
+<body>
+  <div class="atmosphere" aria-hidden="true"></div>
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <div>
+        <p class="brand-name">VariantXL <span class="pro-tag">Pro</span></p>
+        <p class="brand-tag">SKU-level product harvest</p>
+      </div>
+    </div>
+    <nav class="top-nav">
+      <a href="#workspace">Scrape</a>
+      <a href="#competitors">Competitors</a>
+      <a href="#results">Results</a>
+      <a href="#history">History</a>
+    </nav>
+    <div class="alert-bell" id="alert-bell" title="Pending competitor alerts">
+      <span>Alerts</span>
+      <strong id="alert-count">0</strong>
+    </div>
+  </header>
+
+  <main id="workspace" class="workspace">
+    <section class="panel compose" aria-labelledby="compose-title">
+      <header class="panel-head">
+        <h1 id="compose-title">Scrape products</h1>
+        <p>Paste URLs, deep-crawl a whole store, filter what you need, and export Excel — with parallel workers.</p>
+      </header>
+
+      <form id="scrape-form" class="compose-form">
+        <label class="field">
+          <span class="label-row">
+            <span>Product / store URLs</span>
+            <span class="hint">One per line</span>
+          </span>
+          <textarea id="urls" name="urls" rows="7" placeholder="https://floorscenter.com/&#10;https://floorscenter.com/products/example-plank" required></textarea>
+        </label>
+
+        <div class="power-grid">
+          <label class="switch">
+            <input type="checkbox" id="deep-crawl" />
+            <span><strong>Deep crawl</strong> — sitemap + collections + pagination</span>
+          </label>
+          <label class="switch">
+            <input type="checkbox" id="discover" />
+            <span>Treat first URL as store seed</span>
+          </label>
+          <label class="inline-num">
+            Max products
+            <input type="number" id="max-discover" value="500" min="1" max="500" />
+          </label>
+          <label class="inline-num">
+            Workers
+            <input type="number" id="workers" value="3" min="1" max="8" />
+          </label>
+        </div>
+
+        <div class="actions-inline">
+          <button type="button" class="btn ghost" id="btn-discover">Preview deep discovery</button>
+        </div>
+        <div id="discover-preview" class="discover-preview" hidden></div>
+
+        <fieldset class="fields-block">
+          <legend>
+            <span>Fields to keep</span>
+            <span class="legend-actions">
+              <button type="button" class="linkish" data-preset="core">Core</button>
+              <button type="button" class="linkish" data-preset="commerce">Commerce</button>
+              <button type="button" class="linkish" data-preset="full">Full</button>
+            </span>
+          </legend>
+          <div class="field-grid" id="field-grid">
+            {% for field in fields %}
+            <label class="chip">
+              <input type="checkbox" name="fields" value="{{ field.id }}" {% if field.id in default_fields %}checked{% endif %} {% if field.id == 'sku' %}data-required="1"{% endif %} />
+              <span>{{ field.label }}</span>
+            </label>
+            {% endfor %}
+          </div>
+        </fieldset>
+
+        <details class="advanced" open>
+          <summary>Filters &amp; power options</summary>
+          <div class="advanced-grid">
+            <label class="inline-num">Min price<input type="number" id="min-price" min="0" step="0.01" placeholder="any" /></label>
+            <label class="inline-num">Max price<input type="number" id="max-price" min="0" step="0.01" placeholder="any" /></label>
+            <label class="field compact">
+              <span>Brand contains</span>
+              <input type="text" id="brand-contains" placeholder="e.g. Daltile" />
+            </label>
+            <label class="field compact">
+              <span>Search text</span>
+              <input type="text" id="query" placeholder="sku / title / specs" />
+            </label>
+            <label class="switch"><input type="checkbox" id="in-stock-only" /><span>In-stock only</span></label>
+            <label class="switch"><input type="checkbox" id="download-images" /><span>Download images (ZIP)</span></label>
+            <label class="switch"><input type="checkbox" id="use-sitemap" checked /><span>Use sitemap.xml</span></label>
+            <label class="switch"><input type="checkbox" id="use-collections" checked /><span>Crawl collections</span></label>
+            <label class="switch"><input type="checkbox" id="use-browser" checked /><span>Use browser (Playwright)</span></label>
+            <label class="switch"><input type="checkbox" id="interact-variants" checked /><span>Click color / size variants</span></label>
+            <label class="switch"><input type="checkbox" id="respect-robots" checked /><span>Respect robots.txt</span></label>
+            <label class="inline-num">Delay (sec)<input type="number" id="delay" value="0.8" min="0" max="10" step="0.1" /></label>
+            <label class="inline-num">Timeout (sec)<input type="number" id="timeout" value="30" min="5" max="120" /></label>
+          </div>
+        </details>
+
+        <div class="submit-row">
+          <button type="submit" class="btn primary" id="btn-scrape">
+            <span class="btn-label">Start powerful scrape</span>
+          </button>
+          <p class="submit-note">Parallel workers · deep catalog crawl · filters · Excel / CSV / JSON / images</p>
+        </div>
+      </form>
+    </section>
+
+    <section class="panel status-panel" aria-labelledby="status-title">
+      <header class="panel-head">
+        <h2 id="status-title">Live job</h2>
+        <p id="status-subtitle">No scrape running yet.</p>
+      </header>
+
+      <div class="summary-cards" id="summary-cards" hidden></div>
+
+      <div class="progress-block" id="progress-block" hidden>
+        <div class="progress-meta">
+          <span id="progress-label">Queued</span>
+          <span id="progress-pct">0%</span>
+        </div>
+        <div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>
+        <ul class="log-list" id="log-list"></ul>
+      </div>
+
+      <div class="empty-state" id="empty-status">
+        <p>Submit URLs to watch discovery, parallel scraping, and exports here.</p>
+      </div>
+
+      <div class="job-actions" id="job-actions" hidden>
+        <a class="btn primary" id="btn-xlsx" href="#">Download Excel</a>
+        <a class="btn ghost" id="btn-csv" href="#">CSV</a>
+        <a class="btn ghost" id="btn-json" href="#">JSON</a>
+        <a class="btn ghost" id="btn-images" href="#" hidden>Images ZIP</a>
+      </div>
+    </section>
+  </main>
+
+  <section id="competitors" class="competitors-section panel">
+    <header class="panel-head row">
+      <div>
+        <h2>Competitor watch</h2>
+        <p>Add 5–6 competitor sites. Check for new products — scrape only after you approve.</p>
+      </div>
+      <button type="button" class="btn primary" id="btn-check-all">Check all for updates</button>
+    </header>
+
+    <form id="competitor-form" class="competitor-form">
+      <label class="field compact">
+        <span>Name</span>
+        <input type="text" id="comp-name" placeholder="Competitor A" />
+      </label>
+      <label class="field compact">
+        <span>Store URL</span>
+        <input type="text" id="comp-url" placeholder="https://competitor.com/" required />
+      </label>
+      <label class="inline-num">
+        Max discover
+        <input type="number" id="comp-max" value="200" min="1" max="500" />
+      </label>
+      <button type="submit" class="btn ghost">Add competitor</button>
+    </form>
+
+    <div id="competitor-list" class="competitor-list"></div>
+
+    <div class="alerts-panel">
+      <header class="panel-head row">
+        <div>
+          <h3>New / highlighted products</h3>
+          <p id="alerts-meta">No pending alerts. Run “Check all for updates”.</p>
+        </div>
+        <div class="actions-inline">
+          <button type="button" class="btn ghost" id="btn-select-alerts">Select all</button>
+          <button type="button" class="btn ghost" id="btn-dismiss-alerts">Dismiss</button>
+          <button type="button" class="btn primary" id="btn-approve-alerts">Approve &amp; scrape</button>
+        </div>
+      </header>
+      <div id="watch-status" class="watch-status" hidden></div>
+      <div id="alerts-list" class="alerts-list"></div>
+    </div>
+  </section>
+
+  <section id="results" class="results-section panel">
+    <header class="panel-head row">
+      <div>
+        <h2>Results preview</h2>
+        <p id="results-meta">Run a scrape to populate the table.</p>
+      </div>
+      <div class="results-tools">
+        <input type="search" id="table-filter" placeholder="Filter table…" />
+        <div class="stat-pills" id="stat-pills" hidden>
+          <span class="pill"><strong id="stat-records">0</strong> SKUs</span>
+          <span class="pill warn"><strong id="stat-failures">0</strong> failures</span>
+        </div>
+      </div>
+    </header>
+    <div class="table-wrap">
+      <table id="results-table">
+        <thead></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div id="failures-box" class="failures-box" hidden>
+      <h3>Failures</h3>
+      <ul id="failures-list"></ul>
+    </div>
+  </section>
+
+  <section id="history" class="history-section panel">
+    <header class="panel-head">
+      <h2>Recent jobs</h2>
+      <p>Re-open a completed scrape to download again.</p>
+    </header>
+    <div class="history-list" id="history-list"></div>
+  </section>
+
+  <footer class="foot">
+    <p><strong>VariantXL Pro</strong> — competitor watch, approve-to-scrape, deep crawl, and Excel export. Use only on sites you’re allowed to scrape.</p>
+  </footer>
+
+  <script>
+    window.VARIANTXL_PRESETS = {{ presets | tojson }};
+  </script>
+  <script src="/static/js/app.js"></script>
+</body>
+</html>
