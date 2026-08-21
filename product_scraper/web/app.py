@@ -11,6 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
 
+from product_scraper.competitors.watcher import competitor_store, competitor_watcher
 from product_scraper.scraper.catalog import deep_discover
 from product_scraper.web.jobs import (
     AVAILABLE_FIELDS,
@@ -55,6 +56,27 @@ class DiscoverRequest(BaseModel):
     deep: bool = True
     use_sitemap: bool = True
     use_collections: bool = True
+
+
+class CompetitorCreate(BaseModel):
+    name: str = ""
+    seed_url: str
+    max_discover: int = Field(default=200, ge=1, le=500)
+    notes: str = ""
+
+
+class ApproveAlertsRequest(BaseModel):
+    alert_ids: list[str] = Field(default_factory=list)
+    fields: list[str] = Field(default_factory=list)
+    workers: int = 3
+    use_browser: bool = True
+    interact_variants: bool = False
+    respect_robots: bool = True
+    delay: float = 0.8
+
+
+class AlertIdsRequest(BaseModel):
+    alert_ids: list[str] = Field(default_factory=list)
 
 
 def create_app() -> FastAPI:
@@ -196,3 +218,129 @@ async def download_json(job_id: str) -> FileResponse:
 @app.get("/api/jobs/{job_id}/download.images.zip")
 async def download_images_zip(job_id: str) -> FileResponse:
     return _file_response(job_id, "images_zip", "application/zip", f"variantxl_{job_id}_images.zip")
+
+
+# --- Competitor watch ---
+
+
+@app.get("/api/competitors")
+async def api_list_competitors() -> dict[str, Any]:
+    return {
+        "competitors": competitor_store.list_competitors(),
+        "pending_alerts": competitor_store.count_pending(),
+    }
+
+
+@app.post("/api/competitors")
+async def api_add_competitor(body: CompetitorCreate) -> dict[str, Any]:
+    try:
+        return competitor_store.add_competitor(
+            name=body.name,
+            seed_url=body.seed_url,
+            max_discover=body.max_discover,
+            notes=body.notes,
+        )
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.delete("/api/competitors/{competitor_id}")
+async def api_delete_competitor(competitor_id: str) -> dict[str, Any]:
+    ok = competitor_store.delete_competitor(competitor_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Competitor not found")
+    return {"deleted": True, "id": competitor_id}
+
+
+@app.post("/api/competitors/{competitor_id}/check")
+async def api_check_competitor(competitor_id: str) -> dict[str, Any]:
+    try:
+        return competitor_watcher.check_competitor(competitor_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/competitors/check-all")
+async def api_check_all_competitors() -> dict[str, Any]:
+    token = competitor_watcher.check_all_async()
+    return {"token": token, "status": "running", "message": "Checking all competitors…"}
+
+
+@app.get("/api/competitors/check-status/{token}")
+async def api_check_status(token: str) -> dict[str, Any]:
+    state = competitor_watcher.get_async_status(token)
+    if not state:
+        raise HTTPException(status_code=404, detail="Watch run not found")
+    return state
+
+
+@app.get("/api/alerts")
+async def api_alerts(status: str = "pending") -> dict[str, Any]:
+    alerts = competitor_store.list_alerts(status=status if status != "all" else None)
+    return {
+        "alerts": alerts,
+        "pending_count": competitor_store.count_pending(),
+    }
+
+
+@app.post("/api/alerts/dismiss")
+async def api_dismiss_alerts(body: AlertIdsRequest) -> dict[str, Any]:
+    n = competitor_store.set_alert_status(body.alert_ids, "dismissed")
+    return {"dismissed": n, "pending_count": competitor_store.count_pending()}
+
+
+@app.post("/api/alerts/approve")
+async def api_approve_alerts(body: ApproveAlertsRequest) -> dict[str, Any]:
+    """User permission gate: only scrape after explicit approve."""
+    if not body.alert_ids:
+        raise HTTPException(status_code=400, detail="Select at least one alert to approve")
+
+    urls: list[str] = []
+    competitor_ids: set[str] = set()
+    for aid in body.alert_ids:
+        alert = competitor_store.get_alert(aid)
+        if not alert or alert.get("status") != "pending":
+            continue
+        urls.append(alert["product_url"])
+        competitor_ids.add(alert["competitor_id"])
+
+    # de-dupe
+    seen = set()
+    clean = []
+    for u in urls:
+        if u not in seen:
+            seen.add(u)
+            clean.append(u)
+    if not clean:
+        raise HTTPException(status_code=400, detail="No pending alerts to approve")
+
+    competitor_store.set_alert_status(body.alert_ids, "approved")
+    for cid in competitor_ids:
+        competitor_store.mark_scraped(cid, clean)
+
+    try:
+        job = job_manager.create_job(
+            urls=clean,
+            fields=body.fields or DEFAULT_FIELDS,
+            options={
+                "use_browser": body.use_browser,
+                "interact_variants": body.interact_variants,
+                "respect_robots": body.respect_robots,
+                "delay": body.delay,
+                "workers": body.workers,
+                "deep_crawl": False,
+                "discover_from_homepage": False,
+            },
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    return {
+        "approved": len(body.alert_ids),
+        "urls": clean,
+        "job": job.to_public(),
+        "pending_count": competitor_store.count_pending(),
+        "message": f"Approved {len(clean)} product(s) — scrape started (job {job.id})",
+    }

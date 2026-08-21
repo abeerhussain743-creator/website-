@@ -325,4 +325,233 @@
   }
 
   refreshHistory();
+
+  // --- Competitor watch ---
+  const competitorForm = document.getElementById("competitor-form");
+  const competitorList = document.getElementById("competitor-list");
+  const alertsList = document.getElementById("alerts-list");
+  const alertsMeta = document.getElementById("alerts-meta");
+  const alertCount = document.getElementById("alert-count");
+  const alertBell = document.getElementById("alert-bell");
+  const watchStatus = document.getElementById("watch-status");
+  const btnCheckAll = document.getElementById("btn-check-all");
+  const btnApprove = document.getElementById("btn-approve-alerts");
+  const btnDismiss = document.getElementById("btn-dismiss-alerts");
+  const btnSelectAlerts = document.getElementById("btn-select-alerts");
+  let watchPoll = null;
+
+  alertBell.addEventListener("click", () => {
+    document.getElementById("competitors").scrollIntoView({ behavior: "smooth" });
+  });
+
+  async function refreshCompetitors() {
+    try {
+      const data = await api("/api/competitors");
+      const comps = data.competitors || [];
+      updateAlertBadge(data.pending_alerts || 0);
+      if (!comps.length) {
+        competitorList.innerHTML = `<p class="history-meta">No competitors yet. Add 5–6 store URLs above.</p>`;
+      } else {
+        competitorList.innerHTML = comps
+          .map((c) => {
+            const checked = c.last_checked_at
+              ? String(c.last_checked_at).replace("T", " ").slice(0, 19)
+              : "never";
+            return `<article class="competitor-item">
+              <div>
+                <strong>${escapeHtml(c.name)}</strong>
+                <div class="meta">${escapeHtml(c.seed_url)}</div>
+                <div class="meta">Known products: ${c.known_products || 0} · Pending: ${c.pending_alerts || 0} · Last check: ${escapeHtml(checked)}</div>
+              </div>
+              <div class="actions">
+                <button type="button" class="btn ghost" data-check="${c.id}">Check</button>
+                <button type="button" class="btn ghost" data-del="${c.id}">Remove</button>
+              </div>
+            </article>`;
+          })
+          .join("");
+
+        competitorList.querySelectorAll("[data-check]").forEach((btn) => {
+          btn.addEventListener("click", async () => {
+            btn.disabled = true;
+            btn.textContent = "Checking…";
+            try {
+              const res = await api(`/api/competitors/${btn.dataset.check}/check`, { method: "POST", body: "{}" });
+              showWatchStatus(res.message || `Found ${res.new_count} new product(s)`);
+              await refreshCompetitors();
+              await refreshAlerts();
+            } catch (err) {
+              alert(err.message);
+            } finally {
+              btn.disabled = false;
+              btn.textContent = "Check";
+            }
+          });
+        });
+        competitorList.querySelectorAll("[data-del]").forEach((btn) => {
+          btn.addEventListener("click", async () => {
+            if (!confirm("Remove this competitor?")) return;
+            await api(`/api/competitors/${btn.dataset.del}`, { method: "DELETE" });
+            await refreshCompetitors();
+            await refreshAlerts();
+          });
+        });
+      }
+    } catch (err) {
+      competitorList.innerHTML = `<p class="history-meta">${escapeHtml(err.message)}</p>`;
+    }
+  }
+
+  async function refreshAlerts() {
+    try {
+      const data = await api("/api/alerts?status=pending");
+      const alerts = data.alerts || [];
+      updateAlertBadge(data.pending_count || 0);
+      if (!alerts.length) {
+        alertsMeta.textContent = "No pending alerts. Run “Check all for updates”.";
+        alertsList.innerHTML = "";
+        return;
+      }
+      alertsMeta.textContent = `${alerts.length} new product(s) highlighted — select and approve to scrape.`;
+      alertsList.innerHTML = alerts
+        .map(
+          (a) => `<label class="alert-item new">
+            <input type="checkbox" name="alert" value="${escapeAttr(a.id)}" checked />
+            <div>
+              <span class="tag">New</span>
+              <strong>${escapeHtml(a.competitor_name || "Competitor")}</strong>
+              <div style="margin-top:0.25rem;color:var(--ink-muted);font-size:0.84rem">${escapeHtml(a.message)}</div>
+              <a href="${escapeAttr(a.product_url)}" target="_blank" rel="noopener">${escapeHtml(a.product_url)}</a>
+            </div>
+            <div class="meta">${escapeHtml(String(a.created_at || "").replace("T", " ").slice(0, 19))}</div>
+          </label>`
+        )
+        .join("");
+    } catch (err) {
+      alertsMeta.textContent = err.message;
+    }
+  }
+
+  function updateAlertBadge(n) {
+    alertCount.textContent = String(n || 0);
+    alertBell.classList.toggle("has-alerts", Number(n) > 0);
+  }
+
+  function showWatchStatus(msg) {
+    watchStatus.hidden = false;
+    watchStatus.textContent = msg;
+  }
+
+  function selectedAlertIds() {
+    return Array.from(document.querySelectorAll('#alerts-list input[name="alert"]:checked')).map((el) => el.value);
+  }
+
+  competitorForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const seed_url = document.getElementById("comp-url").value.trim();
+    if (!seed_url) return;
+    try {
+      await api("/api/competitors", {
+        method: "POST",
+        body: JSON.stringify({
+          name: document.getElementById("comp-name").value.trim(),
+          seed_url,
+          max_discover: Number(document.getElementById("comp-max").value || 200),
+        }),
+      });
+      document.getElementById("comp-name").value = "";
+      document.getElementById("comp-url").value = "";
+      await refreshCompetitors();
+    } catch (err) {
+      alert(err.message);
+    }
+  });
+
+  btnCheckAll.addEventListener("click", async () => {
+    btnCheckAll.disabled = true;
+    btnCheckAll.textContent = "Checking…";
+    showWatchStatus("Checking all competitors for new products…");
+    try {
+      const start = await api("/api/competitors/check-all", { method: "POST", body: "{}" });
+      if (watchPoll) clearInterval(watchPoll);
+      watchPoll = setInterval(async () => {
+        try {
+          const st = await api(`/api/competitors/check-status/${start.token}`);
+          showWatchStatus(st.message || st.status);
+          if (st.status === "completed" || st.status === "failed") {
+            clearInterval(watchPoll);
+            watchPoll = null;
+            btnCheckAll.disabled = false;
+            btnCheckAll.textContent = "Check all for updates";
+            await refreshCompetitors();
+            await refreshAlerts();
+          }
+        } catch (_) {}
+      }, 1500);
+    } catch (err) {
+      alert(err.message);
+      btnCheckAll.disabled = false;
+      btnCheckAll.textContent = "Check all for updates";
+    }
+  });
+
+  btnSelectAlerts.addEventListener("click", () => {
+    const boxes = document.querySelectorAll('#alerts-list input[name="alert"]');
+    const allOn = Array.from(boxes).every((b) => b.checked);
+    boxes.forEach((b) => {
+      b.checked = !allOn;
+    });
+  });
+
+  btnDismiss.addEventListener("click", async () => {
+    const ids = selectedAlertIds();
+    if (!ids.length) {
+      alert("Select alerts to dismiss.");
+      return;
+    }
+    await api("/api/alerts/dismiss", { method: "POST", body: JSON.stringify({ alert_ids: ids }) });
+    await refreshAlerts();
+    await refreshCompetitors();
+  });
+
+  btnApprove.addEventListener("click", async () => {
+    const ids = selectedAlertIds();
+    if (!ids.length) {
+      alert("Select new products to approve for scraping.");
+      return;
+    }
+    if (!confirm(`Approve and scrape ${ids.length} product(s)?`)) return;
+    btnApprove.disabled = true;
+    try {
+      const res = await api("/api/alerts/approve", {
+        method: "POST",
+        body: JSON.stringify({
+          alert_ids: ids,
+          fields: selectedFields(),
+          workers: Number(workersEl.value || 3),
+          use_browser: document.getElementById("use-browser").checked,
+          interact_variants: false,
+          respect_robots: document.getElementById("respect-robots").checked,
+          delay: Number(document.getElementById("delay").value || 0.8),
+        }),
+      });
+      showWatchStatus(res.message || "Scrape approved and started");
+      await refreshAlerts();
+      await refreshCompetitors();
+      if (res.job && res.job.id) {
+        emptyStatus.hidden = true;
+        progressBlock.hidden = false;
+        renderJob(res.job);
+        startPolling(res.job.id);
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      btnApprove.disabled = false;
+    }
+  });
+
+  refreshCompetitors();
+  refreshAlerts();
 })();

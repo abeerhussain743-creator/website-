@@ -23,6 +23,16 @@ pip install -e .
 playwright install chromium
 ```
 
+## Competitor watch
+
+In the dashboard **Competitors** section:
+
+1. Add 5–6 competitor store URLs
+2. Click **Check all for updates** (discovers new product pages — does not scrape yet)
+3. Review highlighted **New** alerts
+4. Select items → **Approve & scrape** (permission gate)
+5. Download Excel when the scrape job finishes
+
 ## Web dashboard (VariantXL Pro)
 
 Launch a browser UI to paste URLs, deep-crawl stores, pick fields, filter results, and download Excel:

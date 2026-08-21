@@ -22,9 +22,14 @@
     </div>
     <nav class="top-nav">
       <a href="#workspace">Scrape</a>
+      <a href="#competitors">Competitors</a>
       <a href="#results">Results</a>
       <a href="#history">History</a>
     </nav>
+    <div class="alert-bell" id="alert-bell" title="Pending competitor alerts">
+      <span>Alerts</span>
+      <strong id="alert-count">0</strong>
+    </div>
   </header>
 
   <main id="workspace" class="workspace">
@@ -150,6 +155,50 @@
     </section>
   </main>
 
+  <section id="competitors" class="competitors-section panel">
+    <header class="panel-head row">
+      <div>
+        <h2>Competitor watch</h2>
+        <p>Add 5–6 competitor sites. Check for new products — scrape only after you approve.</p>
+      </div>
+      <button type="button" class="btn primary" id="btn-check-all">Check all for updates</button>
+    </header>
+
+    <form id="competitor-form" class="competitor-form">
+      <label class="field compact">
+        <span>Name</span>
+        <input type="text" id="comp-name" placeholder="Competitor A" />
+      </label>
+      <label class="field compact">
+        <span>Store URL</span>
+        <input type="text" id="comp-url" placeholder="https://competitor.com/" required />
+      </label>
+      <label class="inline-num">
+        Max discover
+        <input type="number" id="comp-max" value="200" min="1" max="500" />
+      </label>
+      <button type="submit" class="btn ghost">Add competitor</button>
+    </form>
+
+    <div id="competitor-list" class="competitor-list"></div>
+
+    <div class="alerts-panel">
+      <header class="panel-head row">
+        <div>
+          <h3>New / highlighted products</h3>
+          <p id="alerts-meta">No pending alerts. Run “Check all for updates”.</p>
+        </div>
+        <div class="actions-inline">
+          <button type="button" class="btn ghost" id="btn-select-alerts">Select all</button>
+          <button type="button" class="btn ghost" id="btn-dismiss-alerts">Dismiss</button>
+          <button type="button" class="btn primary" id="btn-approve-alerts">Approve &amp; scrape</button>
+        </div>
+      </header>
+      <div id="watch-status" class="watch-status" hidden></div>
+      <div id="alerts-list" class="alerts-list"></div>
+    </div>
+  </section>
+
   <section id="results" class="results-section panel">
     <header class="panel-head row">
       <div>
@@ -185,7 +234,7 @@
   </section>
 
   <footer class="foot">
-    <p><strong>VariantXL Pro</strong> — deep crawl, parallel workers, filters, and multi-format export. Use only on sites you’re allowed to scrape.</p>
+    <p><strong>VariantXL Pro</strong> — competitor watch, approve-to-scrape, deep crawl, and Excel export. Use only on sites you’re allowed to scrape.</p>
   </footer>
 
   <script>
