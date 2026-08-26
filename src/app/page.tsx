@@ -81,17 +81,23 @@ export default function LandingPage() {
 
         <div className="mx-auto flex max-w-6xl flex-col justify-center px-5 pb-20 pt-16 text-white sm:pt-24">
           <p className="fade-up text-sm font-semibold uppercase tracking-[0.22em] text-white/70">
-            Forge
+            Manufacturing OS
           </p>
-          <h1 className="display fade-up fade-up-delay-1 mt-4 max-w-4xl text-5xl font-extrabold leading-[0.95] sm:text-7xl">
-            The operating system for manufacturing businesses.
+          <h1 className="display fade-up fade-up-delay-1 mt-3 text-6xl font-extrabold leading-none tracking-tight sm:text-8xl">
+            Forge
           </h1>
-          <p className="fade-up fade-up-delay-2 mt-6 max-w-xl text-lg text-white/80">
+          <p className="display fade-up fade-up-delay-1 mt-5 max-w-3xl text-2xl font-semibold leading-snug text-white/95 sm:text-3xl">
+            The operating system for manufacturing businesses.
+          </p>
+          <p className="fade-up fade-up-delay-2 mt-5 max-w-xl text-lg text-white/80">
             Connect sales, materials, machines, quality, and cashflow — then let AI surface the
             problems before they hit the floor.
           </p>
           <div className="fade-up fade-up-delay-3 mt-8 flex flex-wrap gap-3">
-            <Link href="/app" className="btn bg-white text-[var(--steel-deep)] hover:bg-[#f4f7fa]">
+            <Link
+              href="/app"
+              className="btn bg-[#f4f7fa] font-bold text-[#0a3542] hover:bg-white"
+            >
               Explore live demo
               <ArrowRight size={16} />
             </Link>
