@@ -111,7 +111,7 @@ export default function SettingsPage() {
               key={plan.id}
               className={`rounded-xl border p-4 ${
                 data.company.plan === plan.id
-                  ? "border-[var(--steel)] bg-[rgba(19,78,94,0.08)]"
+                  ? "border-[var(--champagne)] bg-[rgba(184,146,90,0.12)]"
                   : "border-[var(--line)] bg-white/70"
               }`}
             >

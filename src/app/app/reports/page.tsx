@@ -44,8 +44,8 @@ export default function ReportsPage() {
                 <YAxis tick={{ fill: "#3d5160", fontSize: 12 }} axisLine={false} tickLine={false} />
                 <Tooltip />
                 <Legend />
-                <Bar dataKey="planned" fill="#94a8b5" radius={[6, 6, 0, 0]} />
-                <Bar dataKey="actual" fill="#134e5e" radius={[6, 6, 0, 0]} />
+                <Bar dataKey="planned" fill="#c5ced8" radius={[6, 6, 0, 0]} />
+                <Bar dataKey="actual" fill="#1b3a3a" radius={[6, 6, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>

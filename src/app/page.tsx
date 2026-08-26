@@ -57,8 +57,8 @@ export default function LandingPage() {
 
       <section className="relative isolate min-h-[calc(100vh-76px)] overflow-hidden">
         <div className="absolute inset-0 -z-10">
-          <div className="absolute inset-0 bg-[linear-gradient(135deg,#0a3542_0%,#134e5e_42%,#1a5f6f_70%,#c2410c_160%)]" />
-          <div className="absolute inset-0 blueprint-grid opacity-30 mix-blend-soft-light" />
+          <div className="absolute inset-0 bg-[linear-gradient(135deg,#102828_0%,#1b3a3a_40%,#2a5250_72%,#b8925a_155%)]" />
+          <div className="absolute inset-0 blueprint-grid opacity-25 mix-blend-soft-light" />
           <div className="hero-sheen" />
           <svg
             className="absolute inset-x-0 bottom-0 h-[55%] w-full opacity-40"
@@ -75,7 +75,7 @@ export default function LandingPage() {
             <rect x="180" y="250" width="90" height="70" rx="8" stroke="rgba(244,247,250,0.35)" />
             <rect x="430" y="170" width="110" height="90" rx="8" stroke="rgba(244,247,250,0.35)" />
             <rect x="720" y="230" width="100" height="80" rx="8" stroke="rgba(244,247,250,0.35)" />
-            <circle cx="860" cy="160" r="10" fill="rgba(245,158,11,0.85)" className="pulse-line" />
+            <circle cx="860" cy="160" r="10" fill="rgba(212,180,131,0.95)" className="pulse-line" />
           </svg>
         </div>
 
@@ -96,7 +96,7 @@ export default function LandingPage() {
           <div className="fade-up fade-up-delay-3 mt-8 flex flex-wrap gap-3">
             <Link
               href="/app"
-              className="btn bg-[#f4f7fa] font-bold text-[#0a3542] hover:bg-white"
+              className="btn btn-signal font-bold"
             >
               Explore live demo
               <ArrowRight size={16} />
@@ -134,7 +134,7 @@ export default function LandingPage() {
               "Payment",
             ].map((step, i) => (
               <div key={step} className="flex items-center gap-2">
-                <span className="rounded-full bg-[rgba(19,78,94,0.08)] px-3 py-2">{step}</span>
+                <span className="rounded-full bg-[rgba(184,146,90,0.14)] px-3 py-2 text-[var(--steel)]">{step}</span>
                 {i < 9 ? <span className="text-[var(--ink-soft)]">→</span> : null}
               </div>
             ))}
@@ -160,7 +160,7 @@ export default function LandingPage() {
             },
           ].map((card) => (
             <div key={card.title} className="panel-flat p-5">
-              <card.icon className="text-[var(--steel)]" size={22} />
+              <card.icon className="text-[var(--champagne)]" size={22} />
               <h3 className="display mt-3 text-xl font-semibold">{card.title}</h3>
               <p className="muted mt-2 text-sm leading-relaxed">{card.body}</p>
             </div>
@@ -178,7 +178,7 @@ export default function LandingPage() {
                 manufacturing OS.
               </p>
             </div>
-            <div className="inline-flex items-center gap-2 rounded-full bg-[rgba(19,78,94,0.08)] px-4 py-2 text-sm font-semibold text-[var(--steel)]">
+            <div className="inline-flex items-center gap-2 rounded-full bg-[rgba(184,146,90,0.14)] px-4 py-2 text-sm font-semibold text-[var(--steel)]">
               <Factory size={16} />
               Initial segment: metal & component manufacturers
             </div>
@@ -226,14 +226,14 @@ export default function LandingPage() {
                 ].map(([name, price, note]) => (
                   <div key={name} className="rounded-xl border border-[var(--line)] bg-[var(--surface-2)] p-4">
                     <p className="text-sm font-semibold">{name}</p>
-                    <p className="display mt-1 text-2xl font-bold text-[var(--steel)]">{price}</p>
+                    <p className="display mt-1 text-2xl font-bold text-[var(--champagne)]">{price}</p>
                     <p className="muted mt-1 text-xs">{note}</p>
                   </div>
                 ))}
               </div>
             </div>
-            <div className="bg-[linear-gradient(160deg,#0a3542,#1b5c6d)] p-8 text-white sm:p-10">
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/60">
+            <div className="bg-[linear-gradient(160deg,#102828,#1b3a3a_60%,#2a5250)] p-8 text-white sm:p-10">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[rgba(212,180,131,0.85)]">
                 Positioning
               </p>
               <p className="display mt-4 text-3xl font-bold leading-tight">
@@ -243,7 +243,7 @@ export default function LandingPage() {
                 Not “ERP for everyone.” A focused system that understands BOM shortages, machine
                 downtime, scrap, and margin — then tells the owner what to do next.
               </p>
-              <Link href="/app" className="btn mt-8 bg-white text-[var(--steel-deep)]">
+              <Link href="/app" className="btn btn-signal mt-8">
                 Enter the Apex Metalworks demo
               </Link>
             </div>

@@ -43,7 +43,7 @@ export default function DashboardPage() {
         <SectionCard
           title="Revenue vs profit"
           action={
-            <Link href="/app/reports" className="text-sm font-semibold text-[var(--steel)]">
+            <Link href="/app/reports" className="text-sm font-semibold text-[var(--champagne)]">
               Reports →
             </Link>
           }
@@ -53,16 +53,16 @@ export default function DashboardPage() {
               <AreaChart data={data.revenueTrend}>
                 <defs>
                   <linearGradient id="rev" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#134e5e" stopOpacity={0.35} />
-                    <stop offset="100%" stopColor="#134e5e" stopOpacity={0} />
+                    <stop offset="0%" stopColor="#2a5250" stopOpacity={0.35} />
+                    <stop offset="100%" stopColor="#2a5250" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid stroke="rgba(12,25,34,0.08)" vertical={false} />
-                <XAxis dataKey="month" tick={{ fill: "#3d5160", fontSize: 12 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fill: "#3d5160", fontSize: 12 }} axisLine={false} tickLine={false} tickFormatter={(v) => `$${v / 1000}k`} />
+                <CartesianGrid stroke="rgba(20,24,31,0.07)" vertical={false} />
+                <XAxis dataKey="month" tick={{ fill: "#667085", fontSize: 12 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fill: "#667085", fontSize: 12 }} axisLine={false} tickLine={false} tickFormatter={(v) => `$${v / 1000}k`} />
                 <Tooltip formatter={(v) => money(Number(v ?? 0))} />
-                <Area type="monotone" dataKey="revenue" stroke="#134e5e" fill="url(#rev)" strokeWidth={2.5} />
-                <Area type="monotone" dataKey="profit" stroke="#c2410c" fill="transparent" strokeWidth={2} />
+                <Area type="monotone" dataKey="revenue" stroke="#1b3a3a" fill="url(#rev)" strokeWidth={2.5} />
+                <Area type="monotone" dataKey="profit" stroke="#b8925a" fill="transparent" strokeWidth={2.25} />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -71,7 +71,7 @@ export default function DashboardPage() {
         <SectionCard
           title="Alerts"
           action={
-            <Link href="/app/ai" className="text-sm font-semibold text-[var(--steel)]">
+            <Link href="/app/ai" className="text-sm font-semibold text-[var(--champagne)]">
               Ask AI →
             </Link>
           }
@@ -149,7 +149,7 @@ export default function DashboardPage() {
               <Link
                 key={href}
                 href={href}
-                className="rounded-xl border border-[var(--line)] bg-[var(--surface-2)] p-4 transition hover:border-[var(--steel)]"
+                className="rounded-2xl border border-[var(--line)] bg-[var(--surface-2)] p-4 transition hover:border-[var(--champagne)] hover:shadow-[var(--shadow)]"
               >
                 <p className="font-semibold">{title}</p>
                 <p className="muted mt-1 text-xs">{body}</p>

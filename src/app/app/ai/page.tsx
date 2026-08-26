@@ -41,7 +41,7 @@ export default function AiPage() {
                 onClick={() => setActiveId(insight.id)}
                 className={`w-full rounded-xl border px-4 py-3 text-left text-sm transition ${
                   activeId === insight.id
-                    ? "border-[var(--steel)] bg-[rgba(19,78,94,0.08)]"
+                    ? "border-[var(--champagne)] bg-[rgba(184,146,90,0.12)]"
                     : "border-[var(--line)] bg-white/70 hover:border-[var(--steel)]"
                 }`}
               >

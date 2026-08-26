@@ -71,7 +71,7 @@ export default function WarehousePage() {
         <div className="flex flex-wrap gap-2">
           {["Receiving", "Putaway", "Picking", "Packing", "Dispatch", "Returns"].map((step, i, arr) => (
             <div key={step} className="flex items-center gap-2">
-              <span className="rounded-full bg-[rgba(19,78,94,0.08)] px-3 py-2 text-xs font-semibold text-[var(--steel)]">
+              <span className="rounded-full bg-[rgba(184,146,90,0.12)] px-3 py-2 text-xs font-semibold text-[var(--steel)]">
                 {step}
               </span>
               {i < arr.length - 1 ? <span className="text-[var(--ink-soft)]">→</span> : null}
