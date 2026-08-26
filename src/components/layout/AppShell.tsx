@@ -1,8 +1,8 @@
 "use client";
 
-import { ForgeProvider } from "@/lib/store";
+import { ForgeProvider, useForge } from "@/lib/store";
 import { Sidebar } from "@/components/layout/Sidebar";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Menu, X } from "lucide-react";
 import { appNav } from "@/lib/nav";
 import Link from "next/link";
@@ -56,6 +56,26 @@ function MobileNav() {
   );
 }
 
+function ToastHost() {
+  const { toast, clearToast } = useForge();
+
+  useEffect(() => {
+    if (!toast) return;
+    const id = window.setTimeout(clearToast, 4200);
+    return () => window.clearTimeout(id);
+  }, [toast, clearToast]);
+
+  if (!toast) return null;
+
+  return (
+    <div className="pointer-events-none fixed bottom-5 right-5 z-50 max-w-sm fade-up">
+      <div className="pointer-events-auto rounded-xl border border-[rgba(19,78,94,0.25)] bg-[var(--steel-deep)] px-4 py-3 text-sm text-white shadow-[var(--shadow)]">
+        {toast}
+      </div>
+    </div>
+  );
+}
+
 export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <ForgeProvider>
@@ -70,6 +90,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </main>
         </div>
       </div>
+      <ToastHost />
     </ForgeProvider>
   );
 }
