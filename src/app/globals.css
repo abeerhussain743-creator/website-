@@ -1,0 +1,311 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #d8e0e8;
+  --bg-deep: #c5d0db;
+  --surface: #f4f7fa;
+  --surface-2: #eaf0f5;
+  --ink: #0c1922;
+  --ink-soft: #3d5160;
+  --steel: #134e5e;
+  --steel-deep: #0a3542;
+  --signal: #c2410c;
+  --ok: #0f766e;
+  --warn: #b45309;
+  --bad: #b91c1c;
+  --info: #1d4f91;
+  --line: rgba(12, 25, 34, 0.1);
+  --shadow: 0 18px 50px rgba(10, 53, 66, 0.12);
+  --radius: 14px;
+  --font-display: var(--font-display);
+  --font-body: var(--font-body);
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-ink: var(--ink);
+  --color-steel: var(--steel);
+  --color-signal: var(--signal);
+  --font-sans: var(--font-body);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  color: var(--ink);
+  background:
+    radial-gradient(1200px 600px at 10% -10%, rgba(19, 78, 94, 0.18), transparent 55%),
+    radial-gradient(900px 500px at 100% 0%, rgba(194, 65, 12, 0.1), transparent 45%),
+    linear-gradient(180deg, #e7eef4 0%, var(--bg) 40%, #d2dbe5 100%);
+  font-family: var(--font-body), "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+.blueprint-grid {
+  background-image:
+    linear-gradient(rgba(19, 78, 94, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(19, 78, 94, 0.06) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
+.display {
+  font-family: var(--font-display), Georgia, serif;
+  letter-spacing: -0.03em;
+}
+
+.panel {
+  background: color-mix(in srgb, var(--surface) 92%, white);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.panel-flat {
+  background: color-mix(in srgb, var(--surface) 88%, white);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.tone-ok {
+  color: var(--ok);
+  background: rgba(15, 118, 110, 0.1);
+}
+.tone-warn {
+  color: var(--warn);
+  background: rgba(180, 83, 9, 0.12);
+}
+.tone-bad {
+  color: var(--bad);
+  background: rgba(185, 28, 28, 0.1);
+}
+.tone-info {
+  color: var(--info);
+  background: rgba(29, 79, 145, 0.1);
+}
+.tone-muted {
+  color: var(--ink-soft);
+  background: rgba(12, 25, 34, 0.06);
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  border-radius: 999px;
+  padding: 0.7rem 1.15rem;
+  border: 1px solid transparent;
+  font-weight: 650;
+  cursor: pointer;
+  transition: transform 160ms ease, background 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.btn:hover {
+  transform: translateY(-1px);
+}
+
+.btn-primary {
+  background: var(--steel);
+  color: #f5fafb;
+  box-shadow: 0 10px 24px rgba(19, 78, 94, 0.28);
+}
+
+.btn-primary:hover {
+  background: var(--steel-deep);
+}
+
+.btn-secondary {
+  background: transparent;
+  border-color: rgba(12, 25, 34, 0.18);
+  color: var(--ink);
+}
+
+.btn-secondary:hover {
+  border-color: var(--steel);
+  color: var(--steel);
+}
+
+.btn-ghost {
+  background: rgba(255, 255, 255, 0.45);
+  border-color: rgba(12, 25, 34, 0.08);
+}
+
+.btn-signal {
+  background: var(--signal);
+  color: white;
+}
+
+.table-wrap {
+  overflow: auto;
+}
+
+table.data {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.92rem;
+}
+
+table.data th {
+  text-align: left;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-soft);
+  padding: 0.75rem 0.85rem;
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+
+table.data td {
+  padding: 0.85rem;
+  border-bottom: 1px solid rgba(12, 25, 34, 0.06);
+  vertical-align: middle;
+}
+
+table.data tr:hover td {
+  background: rgba(19, 78, 94, 0.03);
+}
+
+.metric-value {
+  font-family: var(--font-display), Georgia, serif;
+  font-size: 1.75rem;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+}
+
+.section-title {
+  font-family: var(--font-display), Georgia, serif;
+  font-size: 1.45rem;
+  letter-spacing: -0.03em;
+  margin: 0;
+}
+
+.muted {
+  color: var(--ink-soft);
+}
+
+.fade-up {
+  animation: fadeUp 560ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.fade-up-delay-1 { animation-delay: 80ms; }
+.fade-up-delay-2 { animation-delay: 160ms; }
+.fade-up-delay-3 { animation-delay: 240ms; }
+
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulseLine {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 1; }
+}
+
+.pulse-line {
+  animation: pulseLine 2.4s ease-in-out infinite;
+}
+
+@keyframes flow {
+  from { stroke-dashoffset: 40; }
+  to { stroke-dashoffset: 0; }
+}
+
+.flow-path {
+  stroke-dasharray: 6 8;
+  animation: flow 1.2s linear infinite;
+}
+
+.hero-sheen {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(115deg, transparent 30%, rgba(255, 255, 255, 0.18) 48%, transparent 62%);
+  transform: translateX(-40%);
+  animation: sheen 7s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes sheen {
+  0%, 40% { transform: translateX(-45%); }
+  70%, 100% { transform: translateX(45%); }
+}
+
+.nav-link {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.65rem 0.85rem;
+  border-radius: 12px;
+  color: rgba(244, 247, 250, 0.72);
+  transition: background 140ms ease, color 140ms ease;
+}
+
+.nav-link:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: white;
+}
+
+.nav-link.active {
+  background: rgba(255, 255, 255, 0.12);
+  color: white;
+}
+
+.progress {
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(12, 25, 34, 0.08);
+  overflow: hidden;
+}
+
+.progress > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--steel), #1f7a8c);
+}
+
+@media (max-width: 900px) {
+  .metric-value {
+    font-size: 1.4rem;
+  }
+}
