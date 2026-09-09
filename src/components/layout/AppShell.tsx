@@ -84,6 +84,16 @@ function ToastHost() {
 export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <ForgeProvider>
+      <AppShellInner>{children}</AppShellInner>
+    </ForgeProvider>
+  );
+}
+
+function AppShellInner({ children }: { children: React.ReactNode }) {
+  const { loading } = useForge();
+
+  return (
+    <>
       <div className="flex min-h-screen">
         <div className="sticky top-0 hidden h-screen lg:block">
           <Sidebar />
@@ -92,12 +102,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <MobileNav />
           <main className="blueprint-grid flex-1 px-3 py-4 sm:px-5 sm:py-5 lg:px-7 lg:py-6">
             <div className="app-frame mx-auto max-w-7xl px-4 py-5 sm:px-6 sm:py-6 lg:px-8">
-              {children}
+              {loading ? (
+                <div className="py-16 text-center">
+                  <p className="display text-2xl font-semibold">Loading plant data…</p>
+                  <p className="muted mt-2 text-sm">Syncing Apex Metalworks tenant from the API</p>
+                </div>
+              ) : (
+                children
+              )}
             </div>
           </main>
         </div>
       </div>
       <ToastHost />
-    </ForgeProvider>
+    </>
   );
 }

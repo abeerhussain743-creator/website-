@@ -1,14 +1,22 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { LogOut } from "lucide-react";
 import { appNavGroups } from "@/lib/nav";
 import { useForge } from "@/lib/store";
 import { roleLabels, cn } from "@/lib/format";
 
 export function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
   const { data } = useForge();
+
+  async function logout() {
+    await fetch("/api/auth/logout", { method: "POST" });
+    router.replace("/login");
+    router.refresh();
+  }
 
   return (
     <aside className="flex h-full w-[268px] shrink-0 flex-col bg-[linear-gradient(175deg,#102828_0%,#1b3a3a_48%,#243f3d_100%)] text-white">
@@ -62,6 +70,14 @@ export function Sidebar() {
               </p>
             </div>
           </div>
+          <button
+            type="button"
+            onClick={logout}
+            className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-white/10 px-3 py-2 text-xs font-semibold text-white/85 hover:bg-white/15"
+          >
+            <LogOut size={14} />
+            Sign out
+          </button>
         </div>
       </div>
     </aside>

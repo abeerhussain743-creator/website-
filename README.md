@@ -7,8 +7,10 @@ Forge is a multi-module Manufacturing Management SaaS — built around the real 
 This repository contains:
 
 - Interactive **Phase 1+ product demo** (Apex Metalworks tenant)
+- Demo **login + session auth**
+- **API-backed persistence** for quote conversion, production start, and shortage POs
 - Full **module surfaces** for all 12 product areas
-- [Product blueprint](docs/PRODUCT_BLUEPRINT.md) (entities, screens, workflows, phases, pricing)
+- [Product blueprint](docs/PRODUCT_BLUEPRINT.md)
 - [12-month financial projection](docs/FINANCIAL_PROJECTION.md)
 
 ## Quick start
@@ -18,17 +20,24 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) for the marketing page, then **Launch OS** / **Open demo** for the app at `/app`.
+Open [http://localhost:3000](http://localhost:3000), then **Launch OS** to sign in.
+
+### Demo login
+
+| Email | Password | Role |
+|-------|----------|------|
+| `jordan@apexmetalworks.com` | `demo1234` | Owner |
+| `sofia@apexmetalworks.com` | `demo1234` | Salesperson |
+| `mike@apexmetalworks.com` | `demo1234` | Production Manager |
 
 ## Demo highlights
 
 | Area | What to try |
 |---|---|
-| Dashboard | KPIs, alert feed, revenue chart |
-| Sales | Convert quotation → sales order |
-| Production | BOM explosion, shortage → purchase request, start production |
-| Inventory | Reserved vs available, reorder status |
-| Accounts | AR/AP, banking, product costing |
+| Login | Session cookie auth gates `/app` |
+| Sales | Convert quotation → sales order (persisted) |
+| Production | BOM shortage → purchase request (persisted) |
+| Settings | Reset tenant seed data |
 | AI Copilot | Profit / shortage / line-efficiency insights |
 
 ## Stack
@@ -36,7 +45,8 @@ Open [http://localhost:3000](http://localhost:3000) for the marketing page, then
 - Next.js 15 (App Router) + TypeScript
 - Tailwind CSS 4
 - Recharts
-- In-memory multi-module demo store (no DB required)
+- File-backed tenant store (`data/tenant.json`)
+- Cookie session auth (demo)
 
 ## Product phases
 
@@ -50,5 +60,5 @@ Initial vertical: **metal fabrication & components**.
 
 ## Docs
 
-- `docs/PRODUCT_BLUEPRINT.md` — modules, screens, schema, workflows, RBAC, pricing  
-- `docs/FINANCIAL_PROJECTION.md` — business model and first-12-months projection
+- `docs/PRODUCT_BLUEPRINT.md`
+- `docs/FINANCIAL_PROJECTION.md`

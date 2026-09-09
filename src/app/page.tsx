@@ -45,10 +45,10 @@ export default function LandingPage() {
           Forge
         </div>
         <div className="flex items-center gap-2">
-          <Link href="/app" className="btn btn-secondary hidden sm:inline-flex">
+          <Link href="/login" className="btn btn-secondary hidden sm:inline-flex">
             Open demo
           </Link>
-          <Link href="/app" className="btn btn-primary">
+          <Link href="/login" className="btn btn-primary">
             Launch OS
             <ArrowRight size={16} />
           </Link>
@@ -95,7 +95,7 @@ export default function LandingPage() {
           </p>
           <div className="fade-up fade-up-delay-3 mt-8 flex flex-wrap gap-3">
             <Link
-              href="/app"
+              href="/login"
               className="btn btn-signal font-bold"
             >
               Explore live demo
@@ -243,7 +243,7 @@ export default function LandingPage() {
                 Not “ERP for everyone.” A focused system that understands BOM shortages, machine
                 downtime, scrap, and margin — then tells the owner what to do next.
               </p>
-              <Link href="/app" className="btn btn-signal mt-8">
+              <Link href="/login" className="btn btn-signal mt-8">
                 Enter the Apex Metalworks demo
               </Link>
             </div>

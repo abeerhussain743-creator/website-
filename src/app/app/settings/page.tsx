@@ -47,7 +47,7 @@ const plans = [
 ];
 
 export default function SettingsPage() {
-  const { data } = useForge();
+  const { data, resetData } = useForge();
 
   return (
     <div className="fade-up">
@@ -57,8 +57,14 @@ export default function SettingsPage() {
       />
       <PageHeaderNote>
         Multi-tenant foundation · Each company gets isolated users, products, inventory, sales, and
-        finance.
+        finance. Demo actions persist in <code>data/tenant.json</code>.
       </PageHeaderNote>
+
+      <div className="mb-5 flex flex-wrap gap-2">
+        <button type="button" className="btn btn-secondary" onClick={() => resetData()}>
+          Reset demo data
+        </button>
+      </div>
 
       <div className="grid gap-5 lg:grid-cols-2">
         <SectionCard title="Company">
