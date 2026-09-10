@@ -2,16 +2,7 @@
 
 **AI-powered operating system for manufacturing businesses.**
 
-Forge is a multi-module Manufacturing Management SaaS — built around the real operational loop (sales → purchase → inventory → production → QC → warehouse → invoice), not a generic CRM/ERP.
-
-This repository contains:
-
-- Interactive **Phase 1+ product demo** (Apex Metalworks tenant)
-- Demo **login + session auth**
-- **API-backed persistence** for quote conversion, production start, and shortage POs
-- Full **module surfaces** for all 12 product areas
-- [Product blueprint](docs/PRODUCT_BLUEPRINT.md)
-- [12-month financial projection](docs/FINANCIAL_PROJECTION.md)
+Forge is not only a place to store plant data — it **analyzes results and proposes/executes decisions** (shortage buys, dispatch holds, QC blocks, maintenance, invoicing).
 
 ## Quick start
 
@@ -20,7 +11,7 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000), then **Launch OS** to sign in.
+Open [http://localhost:3000](http://localhost:3000) → **Launch OS** → sign in.
 
 ### Demo login
 
@@ -30,33 +21,23 @@ Open [http://localhost:3000](http://localhost:3000), then **Launch OS** to sign 
 | `sofia@apexmetalworks.com` | `demo1234` | Salesperson |
 | `mike@apexmetalworks.com` | `demo1234` | Production Manager |
 
-## Demo highlights
+## Decision OS (Phases 1–4)
 
-| Area | What to try |
+| Phase | Capability |
 |---|---|
-| Login | Session cookie auth gates `/app` |
-| Sales | Convert quotation → sales order (persisted) |
-| Production | BOM shortage → purchase request (persisted) |
-| Settings | Reset tenant seed data |
-| AI Copilot | Profit / shortage / line-efficiency insights |
+| **1 System of record** | Quote→SO, shortage→PO, receive stock, complete production→FG, invoice, dispatch |
+| **2 Rules** | Auto-propose shortage buys, overdue AR holds, QC blocks, PM scheduling, margin flags |
+| **3 AI Copilot** | Live explainers from tenant metrics (profit, steel cover, line efficiency, AR, QC) |
+| **4 Execute** | Approve / reject / execute / human override + optional auto-execute |
+
+Open **Decision Center** (`/app/decisions`) after login.
 
 ## Stack
 
-- Next.js 15 (App Router) + TypeScript
-- Tailwind CSS 4
-- Recharts
+- Next.js 15 + TypeScript + Tailwind 4
+- Cookie session auth
 - File-backed tenant store (`data/tenant.json`)
-- Cookie session auth (demo)
-
-## Product phases
-
-1. **MVP:** Sales, Purchase, Inventory, Production, Basic Accounts  
-2. **BOM / WO / QC / Warehouse / Costing**  
-3. **HR / Payroll / Maintenance / Advanced finance**  
-4. **AI Copilot + predictive alerts**  
-5. **Multi-plant + API + enterprise**
-
-Initial vertical: **metal fabrication & components**.
+- Rule engine + AI analyzer + action queue
 
 ## Docs
 
