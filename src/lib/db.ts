@@ -1,6 +1,3 @@
-import { promises as fs } from "fs";
-import path from "path";
-import { seedData } from "./seed";
 import type { AppData, DecisionSettings } from "./types";
 import { migrateTenant } from "./migrate";
 import {
@@ -21,34 +18,105 @@ import {
 } from "./decisions";
 import { dispatchSalesOrder } from "./workflows";
 import { analyzeTenant, answerQuestion } from "./ai";
+import { getSession } from "./auth";
+import {
+  buildEmptyTenant,
+  readCompanyTenant,
+  writeCompanyTenant,
+  getCompany,
+  getRegistryUser,
+} from "./tenancy";
+import { seedData } from "./seed";
 
-const DATA_DIR = path.join(process.cwd(), "data");
-const DATA_FILE = path.join(DATA_DIR, "tenant.json");
-
-async function ensureStore() {
-  await fs.mkdir(DATA_DIR, { recursive: true });
-  try {
-    await fs.access(DATA_FILE);
-  } catch {
-    await fs.writeFile(DATA_FILE, JSON.stringify(seedData, null, 2), "utf8");
-  }
+async function requireCompanyId() {
+  const session = await getSession();
+  if (!session?.companyId) throw new Error("Unauthorized");
+  return session;
 }
 
 export async function readTenant(): Promise<AppData> {
-  await ensureStore();
-  const raw = await fs.readFile(DATA_FILE, "utf8");
-  return migrateTenant(JSON.parse(raw) as AppData);
+  const session = await requireCompanyId();
+  const raw = await readCompanyTenant(session.companyId);
+  const data = migrateTenant(raw);
+  const user = await getRegistryUser(session.companyId, session.userId);
+  if (user) {
+    data.user = {
+      id: user.id,
+      companyId: user.companyId,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      department: user.department,
+      avatarInitials: user.avatarInitials,
+    };
+  }
+  return data;
 }
 
 export async function writeTenant(data: AppData): Promise<AppData> {
-  await ensureStore();
+  const session = await requireCompanyId();
   const migrated = migrateTenant(data);
-  await fs.writeFile(DATA_FILE, JSON.stringify(migrated, null, 2), "utf8");
+  await writeCompanyTenant(session.companyId, migrated);
   return migrated;
 }
 
 export async function resetTenant(): Promise<AppData> {
-  return writeTenant(structuredClone(seedData));
+  const session = await requireCompanyId();
+  const company = await getCompany(session.companyId);
+  const user = await getRegistryUser(session.companyId, session.userId);
+  if (!company || !user) throw new Error("Tenant not found");
+
+  if (company.id === "co_apex") {
+    const data = migrateTenant({
+      ...structuredClone(seedData),
+      company: {
+        ...seedData.company,
+        id: company.id,
+        onboardingCompleted: true,
+        createdAt: company.createdAt,
+        country: company.country,
+        employeeBand: company.employeeBand,
+      },
+      user: {
+        id: user.id,
+        companyId: user.companyId,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        department: user.department,
+        avatarInitials: user.avatarInitials,
+      },
+    });
+    await writeCompanyTenant(company.id, data);
+    return data;
+  }
+
+  const data = migrateTenant(
+    buildEmptyTenant({
+      company: {
+        id: company.id,
+        name: company.name,
+        industry: company.industry,
+        plan: company.plan,
+        plants: company.plants,
+        createdAt: company.createdAt,
+        onboardingCompleted: company.onboardingCompleted,
+        country: company.country,
+        employeeBand: company.employeeBand,
+      },
+      owner: {
+        id: user.id,
+        companyId: user.companyId,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        department: user.department,
+        avatarInitials: user.avatarInitials,
+      },
+    })
+  );
+  await writeCompanyTenant(company.id, data);
+  return data;
 }
 
 async function commit(result: { data: AppData; message: string }) {

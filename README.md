@@ -2,7 +2,7 @@
 
 **AI-powered operating system for manufacturing businesses.**
 
-Forge is not only a place to store plant data — it **analyzes results and proposes/executes decisions** (shortage buys, dispatch holds, QC blocks, maintenance, invoicing).
+Multi-tenant SaaS with self-serve customer onboarding, isolated workspaces, and a Decision OS (rules + AI + execute).
 
 ## Quick start
 
@@ -11,9 +11,12 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) → **Launch OS** → sign in.
+- Marketing: http://localhost:3000
+- **Signup / onboarding:** http://localhost:3000/signup
+- Login: http://localhost:3000/login
+- App: http://localhost:3000/app
 
-### Demo login
+### Demo tenant (already onboarded)
 
 | Email | Password | Role |
 |-------|----------|------|
@@ -21,22 +24,19 @@ Open [http://localhost:3000](http://localhost:3000) → **Launch OS** → sign i
 | `sofia@apexmetalworks.com` | `demo1234` | Salesperson |
 | `mike@apexmetalworks.com` | `demo1234` | Production Manager |
 
-## Decision OS (Phases 1–4)
+### New customer flow
 
-| Phase | Capability |
-|---|---|
-| **1 System of record** | Quote→SO, shortage→PO, receive stock, complete production→FG, invoice, dispatch |
-| **2 Rules** | Auto-propose shortage buys, overdue AR holds, QC blocks, PM scheduling, margin flags |
-| **3 AI Copilot** | Live explainers from tenant metrics (profit, steel cover, line efficiency, AR, QC) |
-| **4 Execute** | Approve / reject / execute / human override + optional auto-execute |
+1. `/signup` — company + plan + owner account  
+2. `/onboarding` — confirm plant details, optional teammate invite  
+3. `/app` — isolated tenant workspace + Decision Center  
 
-Open **Decision Center** (`/app/decisions`) after login.
+Tenants are stored under `data/registry.json` + `data/tenants/<companyId>.json`.
 
 ## Stack
 
 - Next.js 15 + TypeScript + Tailwind 4
-- Cookie session auth
-- File-backed tenant store (`data/tenant.json`)
+- Multi-tenant registry + per-company file store
+- Cookie sessions scoped to company
 - Rule engine + AI analyzer + action queue
 
 ## Docs

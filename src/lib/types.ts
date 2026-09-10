@@ -65,6 +65,10 @@ export interface Company {
   industry: string;
   plan: PlanId;
   plants: string[];
+  createdAt?: string;
+  onboardingCompleted?: boolean;
+  country?: string;
+  employeeBand?: string;
 }
 
 export interface User {
@@ -74,6 +78,7 @@ export interface User {
   role: Role;
   department: string;
   avatarInitials: string;
+  companyId?: string;
 }
 
 export interface Customer {

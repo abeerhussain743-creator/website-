@@ -46,10 +46,10 @@ export default function LandingPage() {
         </div>
         <div className="flex items-center gap-2">
           <Link href="/login" className="btn btn-secondary hidden sm:inline-flex">
-            Open demo
+            Sign in
           </Link>
-          <Link href="/login" className="btn btn-primary">
-            Launch OS
+          <Link href="/signup" className="btn btn-primary">
+            Start free
             <ArrowRight size={16} />
           </Link>
         </div>
@@ -94,16 +94,13 @@ export default function LandingPage() {
             problems before they hit the floor.
           </p>
           <div className="fade-up fade-up-delay-3 mt-8 flex flex-wrap gap-3">
-            <Link
-              href="/login"
-              className="btn btn-signal font-bold"
-            >
-              Explore live demo
+            <Link href="/signup" className="btn btn-signal font-bold">
+              Start free onboarding
               <ArrowRight size={16} />
             </Link>
-            <a href="#blueprint" className="btn border border-white/30 text-white hover:bg-white/10">
-              View product blueprint
-            </a>
+            <Link href="/login" className="btn border border-white/30 text-white hover:bg-white/10">
+              Explore live demo
+            </Link>
           </div>
         </div>
       </section>
@@ -243,8 +240,11 @@ export default function LandingPage() {
                 Not “ERP for everyone.” A focused system that understands BOM shortages, machine
                 downtime, scrap, and margin — then tells the owner what to do next.
               </p>
-              <Link href="/login" className="btn btn-signal mt-8">
-                Enter the Apex Metalworks demo
+              <Link href="/signup" className="btn btn-signal mt-8">
+                Create your company workspace
+              </Link>
+              <Link href="/login" className="btn mt-3 border border-white/30 text-white hover:bg-white/10">
+                Enter Apex Metalworks demo
               </Link>
             </div>
           </div>
@@ -252,7 +252,7 @@ export default function LandingPage() {
       </section>
 
       <footer className="border-t border-[var(--line)] px-5 py-8 text-center text-sm text-[var(--ink-soft)]">
-        Forge · Product blueprint + interactive Phase 1 demo · Metal fabrication vertical first
+        Forge · Multi-tenant manufacturing Decision OS · Self-serve SaaS onboarding
       </footer>
     </div>
   );

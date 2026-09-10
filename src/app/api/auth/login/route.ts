@@ -2,10 +2,11 @@ import { NextResponse } from "next/server";
 import {
   DEMO_PASSWORD,
   SESSION_COOKIE,
-  findDemoUser,
-  sessionTokenFor,
+  buildSessionPayload,
+  encodeSession,
   toPublicUser,
 } from "@/lib/auth";
+import { authenticate } from "@/lib/tenancy";
 
 export async function POST(request: Request) {
   const body = (await request.json().catch(() => ({}))) as {
@@ -15,21 +16,46 @@ export async function POST(request: Request) {
 
   const email = body.email?.trim() || "";
   const password = body.password || "";
-  const user = findDemoUser(email, password);
+  const auth = await authenticate(email, password);
 
-  if (!user) {
+  if (!auth) {
     return NextResponse.json(
-      { error: "Invalid email or password. Demo password is demo1234." },
+      {
+        error:
+          "Invalid email or password. Create an account, or use demo jordan@apexmetalworks.com / demo1234.",
+      },
       { status: 401 }
     );
   }
 
-  const response = NextResponse.json({
-    user: toPublicUser(user),
-    hint: `Signed in as ${user.role}. Demo password: ${DEMO_PASSWORD}`,
+  const { user, company } = auth;
+  const payload = buildSessionPayload({
+    companyId: company.id,
+    userId: user.id,
+    email: user.email,
+    name: user.name,
+    role: user.role,
+    department: user.department,
+    avatarInitials: user.avatarInitials,
+    onboardingCompleted: company.onboardingCompleted,
   });
 
-  response.cookies.set(SESSION_COOKIE, sessionTokenFor(user.id), {
+  const response = NextResponse.json({
+    user: toPublicUser(user),
+    company: {
+      id: company.id,
+      name: company.name,
+      plan: company.plan,
+      onboardingCompleted: company.onboardingCompleted,
+    },
+    redirectTo: company.onboardingCompleted ? "/app" : "/onboarding",
+    hint:
+      company.id === "co_apex"
+        ? `Demo workspace. Password for sample users: ${DEMO_PASSWORD}`
+        : "Signed in to your Forge workspace",
+  });
+
+  response.cookies.set(SESSION_COOKIE, encodeSession(payload), {
     httpOnly: true,
     sameSite: "lax",
     path: "/",

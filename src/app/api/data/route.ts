@@ -27,7 +27,7 @@ export async function POST(request: Request) {
   if (body.action === "reset") {
     const data = await resetTenant();
     return NextResponse.json({
-      message: "Tenant data reset to Apex Metalworks seed",
+      message: "Workspace data reset for your tenant",
       data: { ...data, user },
     });
   }

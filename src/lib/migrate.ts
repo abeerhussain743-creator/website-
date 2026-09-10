@@ -14,6 +14,13 @@ export const defaultDecisionSettings: DecisionSettings = {
 export function migrateTenant(data: AppData): AppData {
   return {
     ...data,
+    company: {
+      ...data.company,
+      onboardingCompleted: data.company?.onboardingCompleted ?? true,
+      createdAt: data.company?.createdAt,
+      country: data.company?.country,
+      employeeBand: data.company?.employeeBand,
+    },
     decisions: Array.isArray(data.decisions) ? data.decisions : [],
     decisionSettings: {
       ...defaultDecisionSettings,

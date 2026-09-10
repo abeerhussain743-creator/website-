@@ -4,27 +4,37 @@ import Link from "next/link";
 import { FormEvent, Suspense, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowRight, ShieldCheck } from "lucide-react";
-import { DEMO_PASSWORD, demoUsers } from "@/lib/auth-shared";
+import { DEMO_PASSWORD } from "@/lib/auth-shared";
+
+const demoAccounts = [
+  {
+    email: "jordan@apexmetalworks.com",
+    name: "Jordan Hale",
+    role: "owner",
+  },
+  {
+    email: "sofia@apexmetalworks.com",
+    name: "Sofia Nguyen",
+    role: "salesperson",
+  },
+  {
+    email: "mike@apexmetalworks.com",
+    name: "Mike Torres",
+    role: "production_manager",
+  },
+];
 
 function LoginForm() {
   const router = useRouter();
   const params = useSearchParams();
   const next = params.get("next") || "/app";
 
-  const [email, setEmail] = useState(demoUsers[0].email);
+  const [email, setEmail] = useState(demoAccounts[0].email);
   const [password, setPassword] = useState(DEMO_PASSWORD);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const accounts = useMemo(
-    () =>
-      demoUsers.map((u) => ({
-        email: u.email,
-        role: u.role,
-        name: u.name,
-      })),
-    []
-  );
+  const accounts = useMemo(() => demoAccounts, []);
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
@@ -41,7 +51,7 @@ function LoginForm() {
         setError(json.error || "Login failed");
         return;
       }
-      router.replace(next);
+      router.replace(json.redirectTo || next);
       router.refresh();
     } catch {
       setError("Could not reach the Forge API");
@@ -59,13 +69,13 @@ function LoginForm() {
           </p>
           <h1 className="display mt-3 text-4xl font-extrabold">Sign in to your plant OS</h1>
           <p className="mt-3 max-w-md text-sm text-white/75">
-            Demo auth with role-based session cookies. Phase 1 actions persist on the server for Apex
-            Metalworks.
+            Multi-tenant SaaS login. Each company gets an isolated workspace, plan, and decision
+            engine.
           </p>
         </div>
         <form onSubmit={onSubmit} className="space-y-4 px-8 py-8">
           <label className="block text-sm">
-            <span className="mb-1.5 block font-semibold">Email</span>
+            <span className="mb-1.5 block font-semibold">Work email</span>
             <input
               className="w-full rounded-xl border border-[var(--line-strong)] bg-white px-3.5 py-3 outline-none ring-[var(--champagne)] focus:ring-2"
               value={email}
@@ -95,8 +105,9 @@ function LoginForm() {
             <ArrowRight size={16} />
           </button>
           <p className="text-center text-sm text-[var(--ink-soft)]">
-            <Link href="/" className="font-semibold text-[var(--steel)]">
-              Back to marketing site
+            New manufacturer?{" "}
+            <Link href="/signup" className="font-semibold text-[var(--steel)]">
+              Start free onboarding
             </Link>
           </p>
         </form>
@@ -105,10 +116,10 @@ function LoginForm() {
       <section className="panel p-6 sm:p-8">
         <div className="flex items-center gap-2 text-[var(--champagne)]">
           <ShieldCheck size={18} />
-          <p className="text-sm font-bold uppercase tracking-[0.12em]">Demo accounts</p>
+          <p className="text-sm font-bold uppercase tracking-[0.12em]">Demo tenant</p>
         </div>
         <p className="muted mt-2 text-sm">
-          Password for all accounts: <strong>{DEMO_PASSWORD}</strong>
+          Apex Metalworks password: <strong>{DEMO_PASSWORD}</strong>
         </p>
         <div className="mt-5 space-y-3">
           {accounts.map((account) => (

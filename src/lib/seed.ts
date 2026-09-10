@@ -7,6 +7,9 @@ export const seedData: AppData = {
     industry: "Metal fabrication & components",
     plan: "growth",
     plants: ["Plant A — Houston"],
+    onboardingCompleted: true,
+    country: "United States",
+    employeeBand: "50-200",
   },
   user: {
     id: "u_owner",

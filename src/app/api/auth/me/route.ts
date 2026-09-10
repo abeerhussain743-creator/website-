@@ -1,10 +1,19 @@
 import { NextResponse } from "next/server";
-import { getSessionUser } from "@/lib/auth";
+import { getSessionContext, toPublicUser } from "@/lib/auth";
 
 export async function GET() {
-  const user = await getSessionUser();
-  if (!user) {
+  const ctx = await getSessionContext();
+  if (!ctx) {
     return NextResponse.json({ user: null }, { status: 401 });
   }
-  return NextResponse.json({ user });
+  return NextResponse.json({
+    user: toPublicUser(ctx.user),
+    company: {
+      id: ctx.company.id,
+      name: ctx.company.name,
+      plan: ctx.company.plan,
+      onboardingCompleted: ctx.company.onboardingCompleted,
+      industry: ctx.company.industry,
+    },
+  });
 }

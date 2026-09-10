@@ -56,19 +56,24 @@ export default function SettingsPage() {
         subtitle="Tenant, plan, plants, and role-based access for the manufacturing OS."
       />
       <PageHeaderNote>
-        Multi-tenant foundation · Each company gets isolated users, products, inventory, sales, and
-        finance. Demo actions persist in <code>data/tenant.json</code>.
+        Multi-tenant SaaS · Your company data is isolated in{" "}
+        <code>data/tenants/&lt;companyId&gt;.json</code>. Invite users during onboarding; reset only
+        clears this workspace.
       </PageHeaderNote>
 
       <div className="mb-5 flex flex-wrap gap-2">
         <button type="button" className="btn btn-secondary" onClick={() => resetData()}>
-          Reset demo data
+          Reset workspace data
         </button>
       </div>
 
       <div className="grid gap-5 lg:grid-cols-2">
         <SectionCard title="Company">
           <dl className="space-y-3 text-sm">
+            <div className="flex justify-between gap-4 border-b border-[var(--line)] pb-2">
+              <dt className="muted">Tenant ID</dt>
+              <dd className="font-semibold">{data.company.id}</dd>
+            </div>
             <div className="flex justify-between gap-4 border-b border-[var(--line)] pb-2">
               <dt className="muted">Name</dt>
               <dd className="font-semibold">{data.company.name}</dd>
@@ -80,6 +85,12 @@ export default function SettingsPage() {
             <div className="flex justify-between gap-4 border-b border-[var(--line)] pb-2">
               <dt className="muted">Plan</dt>
               <dd className="font-semibold capitalize">{data.company.plan}</dd>
+            </div>
+            <div className="flex justify-between gap-4 border-b border-[var(--line)] pb-2">
+              <dt className="muted">Onboarding</dt>
+              <dd className="font-semibold">
+                {data.company.onboardingCompleted ? "Complete" : "In progress"}
+              </dd>
             </div>
             <div className="flex justify-between gap-4">
               <dt className="muted">Plants</dt>
