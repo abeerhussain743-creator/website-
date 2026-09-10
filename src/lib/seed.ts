@@ -769,6 +769,18 @@ export const seedData: AppData = {
     { day: "Fri", planned: 400, actual: 385 },
     { day: "Sat", planned: 200, actual: 210 },
   ],
+  decisions: [],
+  decisionSettings: {
+    autoExecute: false,
+    requireApprovalForCritical: true,
+    enableShortageRule: true,
+    enableOverdueHoldRule: true,
+    enableQcBlockRule: true,
+    enableMaintenanceRule: true,
+    enableMarginRule: true,
+  },
+  dispatchHolds: [],
+  qcBlocks: [],
 };
 
 export function availableQty(p: { quantity: number; reserved: number }) {

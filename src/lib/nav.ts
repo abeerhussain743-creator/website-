@@ -12,6 +12,7 @@ import {
   Sparkles,
   Settings,
   Boxes,
+  BrainCircuit,
   type LucideIcon,
 } from "lucide-react";
 
@@ -30,7 +31,10 @@ export type NavGroup = {
 export const appNavGroups: NavGroup[] = [
   {
     label: "Overview",
-    items: [{ href: "/app", label: "Dashboard", icon: LayoutDashboard, short: "Home" }],
+    items: [
+      { href: "/app", label: "Dashboard", icon: LayoutDashboard, short: "Home" },
+      { href: "/app/decisions", label: "Decision Center", icon: BrainCircuit, short: "Decide" },
+    ],
   },
   {
     label: "Sell & Buy",
@@ -69,6 +73,7 @@ export const appNav = appNavGroups.flatMap((g) => g.items);
 
 export const moduleMeta = {
   dashboard: { phase: 1, title: "Dashboard" },
+  decisions: { phase: 4, title: "Decision Center" },
   sales: { phase: 1, title: "CRM & Sales" },
   purchase: { phase: 1, title: "Purchase" },
   inventory: { phase: 1, title: "Inventory / Stores" },

@@ -81,7 +81,7 @@ export const statusTone: Record<string, string> = {
   conditional: "tone-warn",
   sent: "tone-info",
   accepted: "tone-ok",
-  rejected: "tone-bad",
+  rejected: "tone-muted",
   converted: "tone-ok",
   ordered: "tone-info",
   received: "tone-ok",
@@ -99,4 +99,8 @@ export const statusTone: Record<string, string> = {
   critical: "tone-bad",
   warning: "tone-warn",
   info: "tone-info",
+  proposed: "tone-warn",
+  executed: "tone-ok",
+  failed: "tone-bad",
+  overridden: "tone-warn",
 };

@@ -7,7 +7,7 @@ import { money, moneyExact, num } from "@/lib/format";
 import { quoteTotal } from "@/lib/seed";
 
 export default function SalesPage() {
-  const { data, convertQuotation } = useForge();
+  const { data, convertQuotation, invoiceSalesOrder, dispatchSalesOrder } = useForge();
   const pipeline = [
     "lead",
     "qualified",
@@ -172,15 +172,21 @@ export default function SalesPage() {
                 <th>Due</th>
                 <th>Lines</th>
                 <th>Status</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
               {data.salesOrders.map((so) => {
                 const customer = data.customers.find((c) => c.id === so.customerId);
                 const total = so.lines.reduce((s, l) => s + l.quantity * l.unitPrice, 0);
+                const held =
+                  data.dispatchHolds.includes(so.id) || data.dispatchHolds.includes(so.number);
                 return (
                   <tr key={so.id}>
-                    <td className="font-semibold">{so.number}</td>
+                    <td className="font-semibold">
+                      {so.number}
+                      {held ? <span className="ml-2 badge tone-bad">hold</span> : null}
+                    </td>
                     <td>{customer?.company}</td>
                     <td>{so.date}</td>
                     <td>{so.dueDate}</td>
@@ -189,6 +195,28 @@ export default function SalesPage() {
                     </td>
                     <td>
                       <StatusBadge status={so.status} />
+                    </td>
+                    <td>
+                      <div className="flex flex-wrap gap-1">
+                        {["confirmed", "ready", "dispatched"].includes(so.status) ? (
+                          <button
+                            type="button"
+                            className="btn btn-secondary py-1 text-xs"
+                            onClick={() => invoiceSalesOrder(so.id)}
+                          >
+                            Invoice
+                          </button>
+                        ) : null}
+                        {["ready", "confirmed", "in_production", "invoiced"].includes(so.status) ? (
+                          <button
+                            type="button"
+                            className="btn btn-primary py-1 text-xs"
+                            onClick={() => dispatchSalesOrder(so.id)}
+                          >
+                            Dispatch
+                          </button>
+                        ) : null}
+                      </div>
                     </td>
                   </tr>
                 );

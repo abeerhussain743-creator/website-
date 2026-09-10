@@ -6,7 +6,7 @@ import { useForge } from "@/lib/store";
 import { money, moneyExact, num } from "@/lib/format";
 
 export default function PurchasePage() {
-  const { data } = useForge();
+  const { data, receivePurchase } = useForge();
   const flow = [
     "Material requirement",
     "Purchase request",
@@ -75,6 +75,7 @@ export default function PurchasePage() {
                   <th>Expected</th>
                   <th>Total</th>
                   <th>Status</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -91,6 +92,17 @@ export default function PurchasePage() {
                       <td>{moneyExact(po.total)}</td>
                       <td>
                         <StatusBadge status={po.status} />
+                      </td>
+                      <td>
+                        {["request", "approved", "rfq", "ordered"].includes(po.status) ? (
+                          <button
+                            type="button"
+                            className="btn btn-primary py-1 text-xs"
+                            onClick={() => receivePurchase(po.id)}
+                          >
+                            Receive
+                          </button>
+                        ) : null}
                       </td>
                     </tr>
                   );

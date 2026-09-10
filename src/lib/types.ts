@@ -284,6 +284,7 @@ export interface AiInsight {
   question: string;
   answer: string;
   metrics: { label: string; value: string; trend?: "up" | "down" | "flat" }[];
+  recommendationIds?: string[];
 }
 
 export interface DashboardMetrics {
@@ -296,6 +297,48 @@ export interface DashboardMetrics {
   receivables: number;
   payables: number;
   cashBalance: number;
+}
+
+export type DecisionActionType =
+  | "create_purchase_request"
+  | "hold_dispatch"
+  | "block_qc_release"
+  | "create_invoice"
+  | "schedule_maintenance"
+  | "flag_margin"
+  | "credit_hold";
+
+export type DecisionStatus =
+  | "proposed"
+  | "approved"
+  | "rejected"
+  | "executed"
+  | "failed"
+  | "overridden";
+
+export interface DecisionAction {
+  id: string;
+  type: DecisionActionType;
+  title: string;
+  reason: string;
+  source: "rule" | "ai";
+  severity: "critical" | "warning" | "info";
+  status: DecisionStatus;
+  createdAt: string;
+  updatedAt: string;
+  autoExecutable: boolean;
+  payload: Record<string, string | number | boolean | null>;
+  resultMessage?: string;
+}
+
+export interface DecisionSettings {
+  autoExecute: boolean;
+  requireApprovalForCritical: boolean;
+  enableShortageRule: boolean;
+  enableOverdueHoldRule: boolean;
+  enableQcBlockRule: boolean;
+  enableMaintenanceRule: boolean;
+  enableMarginRule: boolean;
 }
 
 export interface AppData {
@@ -322,4 +365,8 @@ export interface AppData {
   metrics: DashboardMetrics;
   revenueTrend: { month: string; revenue: number; cogs: number; profit: number }[];
   productionTrend: { day: string; planned: number; actual: number }[];
+  decisions: DecisionAction[];
+  decisionSettings: DecisionSettings;
+  dispatchHolds: string[];
+  qcBlocks: string[];
 }

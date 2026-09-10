@@ -7,7 +7,7 @@ import { materialRequirements } from "@/lib/seed";
 import { moneyExact, num } from "@/lib/format";
 
 export default function ProductionPage() {
-  const { data, startProduction, createPurchaseFromShortage } = useForge();
+  const { data, startProduction, createPurchaseFromShortage, completeProduction } = useForge();
   const focus = data.productionOrders.find((p) => p.number === "PR-1026") ?? data.productionOrders[0];
   const bom = data.boms.find((b) => b.productId === focus.productId);
   const requirements = bom
@@ -62,6 +62,13 @@ export default function ProductionPage() {
                 onClick={() => startProduction(focus.id)}
               >
                 Start production
+              </button>
+              <button
+                type="button"
+                className="btn btn-signal py-2 text-sm"
+                onClick={() => completeProduction(focus.id)}
+              >
+                Complete → FG
               </button>
             </div>
           }
@@ -174,14 +181,19 @@ export default function ProductionPage() {
                 <th>Deadline</th>
                 <th>Progress</th>
                 <th>Status</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
               {data.productionOrders.map((p) => {
                 const product = data.products.find((x) => x.id === p.productId);
+                const blocked = data.qcBlocks.includes(p.number) || data.qcBlocks.includes(p.id);
                 return (
                   <tr key={p.id}>
-                    <td className="font-semibold">{p.number}</td>
+                    <td className="font-semibold">
+                      {p.number}
+                      {blocked ? <span className="ml-2 badge tone-bad">qc block</span> : null}
+                    </td>
                     <td>{product?.name}</td>
                     <td>{num(p.quantity)}</td>
                     <td>{p.deadline}</td>
@@ -195,6 +207,17 @@ export default function ProductionPage() {
                     </td>
                     <td>
                       <StatusBadge status={p.status} />
+                    </td>
+                    <td>
+                      {p.status !== "completed" ? (
+                        <button
+                          type="button"
+                          className="btn btn-secondary py-1 text-xs"
+                          onClick={() => completeProduction(p.id)}
+                        >
+                          Complete
+                        </button>
+                      ) : null}
                     </td>
                   </tr>
                 );

@@ -141,9 +141,9 @@ export default function DashboardPage() {
         >
           <div className="grid gap-3 sm:grid-cols-2">
             {[
+              ["/app/decisions", "Run decisions", "Rules + AI propose actions you can execute"],
               ["/app/sales", "Convert quotation", "Turn QT-1023 into a sales order"],
               ["/app/production", "Resolve shortage", "Create purchase from BOM gap"],
-              ["/app/inventory", "Review low stock", "Steel & packaging thresholds"],
               ["/app/ai", "Ask the copilot", "Why did profit drop this month?"],
             ].map(([href, title, body]) => (
               <Link
