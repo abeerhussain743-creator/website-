@@ -11,6 +11,7 @@ import {
 } from "react";
 import { seedData } from "./seed";
 import type { AppData, DecisionSettings } from "./types";
+import type { SupervisorAction } from "./supervisor";
 
 type ForgeStore = {
   data: AppData;
@@ -35,6 +36,7 @@ type ForgeStore = {
   overrideDecision: (decisionId: string) => Promise<void>;
   autoExecute: () => Promise<void>;
   updateSettings: (settings: Partial<DecisionSettings>) => Promise<void>;
+  submitSupervisorEntry: (input: SupervisorAction) => Promise<void>;
 };
 
 const ForgeContext = createContext<ForgeStore | null>(null);
@@ -121,6 +123,7 @@ export function ForgeProvider({ children }: { children: ReactNode }) {
       autoExecute: async () => post("/api/decisions", { action: "auto_execute" }),
       updateSettings: async (settings) =>
         post("/api/decisions", { action: "update_settings", settings }),
+      submitSupervisorEntry: async (input) => post("/api/supervisor", input),
     }),
     [data, loading, toast, clearToast, refresh, post]
   );

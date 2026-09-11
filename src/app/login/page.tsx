@@ -10,26 +10,51 @@ const demoAccounts = [
   {
     email: "jordan@apexmetalworks.com",
     name: "Jordan Hale",
-    role: "owner",
+    role: "Owner (full OS)",
   },
   {
     email: "sofia@apexmetalworks.com",
     name: "Sofia Nguyen",
-    role: "salesperson",
+    role: "Sales supervisor",
   },
   {
     email: "mike@apexmetalworks.com",
     name: "Mike Torres",
-    role: "production_manager",
+    role: "Production supervisor",
+  },
+  {
+    email: "priya@apexmetalworks.com",
+    name: "Priya Shah",
+    role: "Purchase supervisor",
+  },
+  {
+    email: "devon@apexmetalworks.com",
+    name: "Devon Clarke",
+    role: "Stores / warehouse supervisor",
+  },
+  {
+    email: "aisha@apexmetalworks.com",
+    name: "Aisha Rahman",
+    role: "QC supervisor",
+  },
+  {
+    email: "carmen@apexmetalworks.com",
+    name: "Carmen Diaz",
+    role: "HR supervisor",
+  },
+  {
+    email: "noah@apexmetalworks.com",
+    name: "Noah Patel",
+    role: "Accounts supervisor",
   },
 ];
 
 function LoginForm() {
   const router = useRouter();
   const params = useSearchParams();
-  const next = params.get("next") || "/app";
+  const next = params.get("next");
 
-  const [email, setEmail] = useState(demoAccounts[0].email);
+  const [email, setEmail] = useState(demoAccounts[1].email);
   const [password, setPassword] = useState(DEMO_PASSWORD);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -51,7 +76,7 @@ function LoginForm() {
         setError(json.error || "Login failed");
         return;
       }
-      router.replace(json.redirectTo || next);
+      router.replace(next || json.redirectTo || "/app");
       router.refresh();
     } catch {
       setError("Could not reach the Forge API");
@@ -69,8 +94,8 @@ function LoginForm() {
           </p>
           <h1 className="display mt-3 text-4xl font-extrabold">Sign in to your plant OS</h1>
           <p className="mt-3 max-w-md text-sm text-white/75">
-            Multi-tenant SaaS login. Each company gets an isolated workspace, plan, and decision
-            engine.
+            Owners see the full Decision OS. Department supervisors land on the Supervisor Desk to
+            enter operational data.
           </p>
         </div>
         <form onSubmit={onSubmit} className="space-y-4 px-8 py-8">
@@ -116,12 +141,12 @@ function LoginForm() {
       <section className="panel p-6 sm:p-8">
         <div className="flex items-center gap-2 text-[var(--champagne)]">
           <ShieldCheck size={18} />
-          <p className="text-sm font-bold uppercase tracking-[0.12em]">Demo tenant</p>
+          <p className="text-sm font-bold uppercase tracking-[0.12em]">Demo accounts</p>
         </div>
         <p className="muted mt-2 text-sm">
-          Apex Metalworks password: <strong>{DEMO_PASSWORD}</strong>
+          Password for all: <strong>{DEMO_PASSWORD}</strong>
         </p>
-        <div className="mt-5 space-y-3">
+        <div className="mt-5 max-h-[420px] space-y-3 overflow-y-auto pr-1">
           {accounts.map((account) => (
             <button
               key={account.email}
@@ -134,7 +159,7 @@ function LoginForm() {
             >
               <p className="font-semibold">{account.name}</p>
               <p className="muted text-xs">
-                {account.email} · {account.role.replaceAll("_", " ")}
+                {account.email} · {account.role}
               </p>
             </button>
           ))}

@@ -56,7 +56,8 @@ export async function readRegistry(): Promise<Registry> {
   await ensureDirs();
   try {
     const raw = await fs.readFile(REGISTRY_FILE, "utf8");
-    return JSON.parse(raw) as Registry;
+    const registry = JSON.parse(raw) as Registry;
+    return ensureDemoSupervisors(registry);
   } catch {
     const seeded = await seedDemoRegistry();
     return seeded;
@@ -87,41 +88,7 @@ export async function writeCompanyTenant(companyId: string, data: AppData) {
 
 async function seedDemoRegistry(): Promise<Registry> {
   const companyId = "co_apex";
-  const users: RegistryUser[] = [
-    {
-      id: "u_owner",
-      companyId,
-      name: "Jordan Hale",
-      email: "jordan@apexmetalworks.com",
-      role: "owner",
-      department: "Executive",
-      avatarInitials: "JH",
-      passwordHash: hashPassword("demo1234"),
-      createdAt: new Date().toISOString(),
-    },
-    {
-      id: "u_sales",
-      companyId,
-      name: "Sofia Nguyen",
-      email: "sofia@apexmetalworks.com",
-      role: "salesperson",
-      department: "Sales",
-      avatarInitials: "SN",
-      passwordHash: hashPassword("demo1234"),
-      createdAt: new Date().toISOString(),
-    },
-    {
-      id: "u_prod",
-      companyId,
-      name: "Mike Torres",
-      email: "mike@apexmetalworks.com",
-      role: "production_manager",
-      department: "Production",
-      avatarInitials: "MT",
-      passwordHash: hashPassword("demo1234"),
-      createdAt: new Date().toISOString(),
-    },
-  ];
+  const users: RegistryUser[] = demoSupervisorUsers(companyId);
 
   const company: RegistryCompany = {
     id: companyId,
@@ -150,6 +117,117 @@ async function seedDemoRegistry(): Promise<Registry> {
     },
     user: users[0],
   });
+  return registry;
+}
+
+function demoSupervisorUsers(companyId: string): RegistryUser[] {
+  const now = new Date().toISOString();
+  const passwordHash = hashPassword("demo1234");
+  return [
+    {
+      id: "u_owner",
+      companyId,
+      name: "Jordan Hale",
+      email: "jordan@apexmetalworks.com",
+      role: "owner",
+      department: "Executive",
+      avatarInitials: "JH",
+      passwordHash,
+      createdAt: now,
+    },
+    {
+      id: "u_sales",
+      companyId,
+      name: "Sofia Nguyen",
+      email: "sofia@apexmetalworks.com",
+      role: "salesperson",
+      department: "Sales",
+      avatarInitials: "SN",
+      passwordHash,
+      createdAt: now,
+    },
+    {
+      id: "u_prod",
+      companyId,
+      name: "Mike Torres",
+      email: "mike@apexmetalworks.com",
+      role: "production_manager",
+      department: "Production",
+      avatarInitials: "MT",
+      passwordHash,
+      createdAt: now,
+    },
+    {
+      id: "u_purchase",
+      companyId,
+      name: "Priya Shah",
+      email: "priya@apexmetalworks.com",
+      role: "purchase_manager",
+      department: "Purchasing",
+      avatarInitials: "PS",
+      passwordHash,
+      createdAt: now,
+    },
+    {
+      id: "u_stores",
+      companyId,
+      name: "Devon Clarke",
+      email: "devon@apexmetalworks.com",
+      role: "store_manager",
+      department: "Stores",
+      avatarInitials: "DC",
+      passwordHash,
+      createdAt: now,
+    },
+    {
+      id: "u_qc",
+      companyId,
+      name: "Aisha Rahman",
+      email: "aisha@apexmetalworks.com",
+      role: "qc_manager",
+      department: "Quality",
+      avatarInitials: "AR",
+      passwordHash,
+      createdAt: now,
+    },
+    {
+      id: "u_hr",
+      companyId,
+      name: "Carmen Diaz",
+      email: "carmen@apexmetalworks.com",
+      role: "hr_manager",
+      department: "HR",
+      avatarInitials: "CD",
+      passwordHash,
+      createdAt: now,
+    },
+    {
+      id: "u_acct",
+      companyId,
+      name: "Noah Patel",
+      email: "noah@apexmetalworks.com",
+      role: "accountant",
+      department: "Accounts",
+      avatarInitials: "NP",
+      passwordHash,
+      createdAt: now,
+    },
+  ];
+}
+
+/** Ensure Apex demo supervisors exist even on older registry files. */
+export async function ensureDemoSupervisors(registry: Registry): Promise<Registry> {
+  const companyId = "co_apex";
+  if (!registry.companies.some((c) => c.id === companyId)) return registry;
+  const extras = demoSupervisorUsers(companyId);
+  let changed = false;
+  for (const user of extras) {
+    if (!registry.users.some((u) => u.email.toLowerCase() === user.email.toLowerCase())) {
+      registry.users.push(user);
+      changed = true;
+    }
+  }
+  if (changed) await writeRegistry(registry);
   return registry;
 }
 

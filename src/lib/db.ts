@@ -27,6 +27,7 @@ import {
   getRegistryUser,
 } from "./tenancy";
 import { seedData } from "./seed";
+import { applySupervisorAction, type SupervisorAction } from "./supervisor";
 
 async function requireCompanyId() {
   const session = await getSession();
@@ -209,4 +210,9 @@ export async function mutateUpdateSettings(patch: Partial<DecisionSettings>) {
     decisionSettings: { ...current.decisionSettings, ...patch },
   });
   return { data, message: "Decision settings updated" };
+}
+
+export async function mutateSupervisorEntry(input: SupervisorAction) {
+  const current = await readTenant();
+  return commit(applySupervisorAction(current, input, current.user.name));
 }

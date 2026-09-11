@@ -7,6 +7,8 @@ import {
   toPublicUser,
 } from "@/lib/auth";
 import { authenticate } from "@/lib/tenancy";
+import { homeForRole } from "@/lib/permissions";
+import type { Role } from "@/lib/types";
 
 export async function POST(request: Request) {
   const body = (await request.json().catch(() => ({}))) as {
@@ -48,7 +50,9 @@ export async function POST(request: Request) {
       plan: company.plan,
       onboardingCompleted: company.onboardingCompleted,
     },
-    redirectTo: company.onboardingCompleted ? "/app" : "/onboarding",
+    redirectTo: company.onboardingCompleted
+      ? homeForRole(user.role as Role)
+      : "/onboarding",
     hint:
       company.id === "co_apex"
         ? `Demo workspace. Password for sample users: ${DEMO_PASSWORD}`
