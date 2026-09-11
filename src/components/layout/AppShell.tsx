@@ -4,14 +4,16 @@ import { ForgeProvider, useForge } from "@/lib/store";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { useEffect, useState } from "react";
 import { Menu, X } from "lucide-react";
-import { appNavGroups } from "@/lib/nav";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/format";
+import { navForRole } from "@/lib/permissions";
 
 function MobileNav() {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
+  const { data } = useForge();
+  const groups = navForRole(data.user.role);
 
   return (
     <div className="lg:hidden">
@@ -30,7 +32,7 @@ function MobileNav() {
       </div>
       {open ? (
         <div className="max-h-[70vh] overflow-y-auto border-b border-white/10 bg-[var(--steel)] px-3 py-3">
-          {appNavGroups.map((group) => (
+          {groups.map((group) => (
             <div key={group.label} className="mb-2">
               <p className="nav-group-label">{group.label}</p>
               <nav className="grid gap-0.5">

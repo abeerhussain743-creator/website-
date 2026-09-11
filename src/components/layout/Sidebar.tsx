@@ -3,14 +3,15 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { LogOut } from "lucide-react";
-import { appNavGroups } from "@/lib/nav";
 import { useForge } from "@/lib/store";
 import { roleLabels, cn } from "@/lib/format";
+import { navForRole } from "@/lib/permissions";
 
 export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const { data } = useForge();
+  const groups = navForRole(data.user.role);
 
   async function logout() {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -26,12 +27,12 @@ export function Sidebar() {
         </Link>
         <p className="mt-1 text-xs text-white/55">Manufacturing OS</p>
         <div className="easy-chip mt-3 bg-[rgba(212,180,131,0.18)] text-[rgba(244,230,200,0.95)]">
-          Premium workspace
+          {data.user.department} desk
         </div>
       </div>
 
       <nav className="flex-1 overflow-y-auto px-3 py-3">
-        {appNavGroups.map((group) => (
+        {groups.map((group) => (
           <div key={group.label} className="mb-1">
             <p className="nav-group-label">{group.label}</p>
             <div className="space-y-0.5">

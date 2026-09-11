@@ -13,6 +13,7 @@ import {
   Settings,
   Boxes,
   BrainCircuit,
+  ClipboardList,
   type LucideIcon,
 } from "lucide-react";
 
@@ -33,6 +34,7 @@ export const appNavGroups: NavGroup[] = [
     label: "Overview",
     items: [
       { href: "/app", label: "Dashboard", icon: LayoutDashboard, short: "Home" },
+      { href: "/app/supervisor", label: "Supervisor Desk", icon: ClipboardList, short: "Desk" },
       { href: "/app/decisions", label: "Decision Center", icon: BrainCircuit, short: "Decide" },
     ],
   },
@@ -73,6 +75,7 @@ export const appNav = appNavGroups.flatMap((g) => g.items);
 
 export const moduleMeta = {
   dashboard: { phase: 1, title: "Dashboard" },
+  supervisor: { phase: 1, title: "Supervisor Desk" },
   decisions: { phase: 4, title: "Decision Center" },
   sales: { phase: 1, title: "CRM & Sales" },
   purchase: { phase: 1, title: "Purchase" },

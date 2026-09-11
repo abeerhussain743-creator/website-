@@ -18,11 +18,20 @@ npm run dev
 
 ### Demo tenant (already onboarded)
 
-| Email | Password | Role |
-|-------|----------|------|
-| `jordan@apexmetalworks.com` | `demo1234` | Owner |
-| `sofia@apexmetalworks.com` | `demo1234` | Salesperson |
-| `mike@apexmetalworks.com` | `demo1234` | Production Manager |
+Password for all demo users: `demo1234`
+
+| Email | Role | Lands on |
+|-------|------|----------|
+| `jordan@apexmetalworks.com` | Owner | Full dashboard + Decision Center |
+| `sofia@apexmetalworks.com` | Sales supervisor | Supervisor Desk (customers, quotes) |
+| `mike@apexmetalworks.com` | Production supervisor | Supervisor Desk (orders, work orders) |
+| `priya@apexmetalworks.com` | Purchase supervisor | Supervisor Desk (suppliers, POs) |
+| `devon@apexmetalworks.com` | Stores / warehouse | Supervisor Desk (SKU, stock, bins) |
+| `aisha@apexmetalworks.com` | QC supervisor | Supervisor Desk (inspections) |
+| `carmen@apexmetalworks.com` | HR supervisor | Supervisor Desk (employees) |
+| `noah@apexmetalworks.com` | Accounts supervisor | Supervisor Desk (invoices / bills) |
+
+**Supervisor Desk:** `/app/supervisor` — department forms to enter live plant data.
 
 ### New customer flow
 
