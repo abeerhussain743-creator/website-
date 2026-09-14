@@ -1,0 +1,476 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum MembershipRole {
+  OWNER
+  ADMIN
+  MANAGER
+  OPERATOR
+  VIEWER
+}
+
+enum PlanCode {
+  FREE
+  STARTER
+  GROWTH
+  PRO
+  ENTERPRISE
+}
+
+enum SubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELLED
+}
+
+enum JobType {
+  PRODUCT_IMPORT
+  PRODUCT_EXPORT
+  PRODUCT_BULK_UPDATE
+}
+
+enum JobStatus {
+  QUEUED
+  VALIDATING
+  PROCESSING
+  COMPLETED
+  PARTIALLY_COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum Dataset {
+  PRODUCTS
+}
+
+enum FileKind {
+  UPLOAD
+  EXPORT
+  ERROR_REPORT
+  BACKUP
+  TEMPLATE
+}
+
+enum JobRecordStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  SKIPPED
+}
+
+model Organization {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  slug      String   @unique
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  memberships   Membership[]
+  stores        Store[]
+  subscription  Subscription?
+  usageRecords  UsageRecord[]
+  jobs          Job[]
+  files         FileObject[]
+  templates     Template[]
+  fieldMappings FieldMapping[]
+  auditLogs     AuditLog[]
+  notifications Notification[]
+  scheduledJobs ScheduledJob[]
+  backups       Backup[]
+
+  @@map("organizations")
+}
+
+model User {
+  id            String   @id @default(uuid()) @db.Uuid
+  email         String   @unique
+  name          String?
+  shopifyUserId String?  @map("shopify_user_id")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  memberships   Membership[]
+  jobs          Job[]        @relation("JobCreator")
+  auditLogs     AuditLog[]
+  notifications Notification[]
+
+  @@map("users")
+}
+
+model Membership {
+  id             String         @id @default(uuid()) @db.Uuid
+  organizationId String         @map("organization_id") @db.Uuid
+  userId         String         @map("user_id") @db.Uuid
+  role           MembershipRole @default(OPERATOR)
+  createdAt      DateTime       @default(now()) @map("created_at")
+  updatedAt      DateTime       @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId])
+  @@index([userId])
+  @@map("memberships")
+}
+
+model Plan {
+  id                    String   @id @default(uuid()) @db.Uuid
+  code                  PlanCode @unique
+  name                  String
+  recordsPerMonth       Int      @map("records_per_month")
+  importsPerMonth       Int      @map("imports_per_month")
+  exportsPerMonth       Int      @map("exports_per_month")
+  maxStores             Int      @map("max_stores")
+  maxScheduledJobs      Int      @map("max_scheduled_jobs")
+  backupRetentionDays   Int      @map("backup_retention_days")
+  maxTeamMembers        Int      @map("max_team_members")
+  advancedTransforms    Boolean  @default(false) @map("advanced_transforms")
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+
+  subscriptions Subscription[]
+
+  @@map("plans")
+}
+
+model Subscription {
+  id                   String             @id @default(uuid()) @db.Uuid
+  organizationId       String             @unique @map("organization_id") @db.Uuid
+  planId               String             @map("plan_id") @db.Uuid
+  status               SubscriptionStatus @default(TRIALING)
+  shopifyChargeId      String?            @map("shopify_charge_id")
+  currentPeriodStart   DateTime?          @map("current_period_start")
+  currentPeriodEnd     DateTime?          @map("current_period_end")
+  createdAt            DateTime           @default(now()) @map("created_at")
+  updatedAt            DateTime           @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  plan         Plan         @relation(fields: [planId], references: [id])
+
+  @@map("subscriptions")
+}
+
+model UsageRecord {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  storeId        String?  @map("store_id") @db.Uuid
+  meter          String
+  quantity       Int
+  periodStart    DateTime @map("period_start")
+  periodEnd      DateTime @map("period_end")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  store        Store?       @relation(fields: [storeId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, meter, periodStart])
+  @@map("usage_records")
+}
+
+model Store {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  shopDomain     String    @unique @map("shop_domain")
+  name           String?
+  currency       String?
+  timezone       String?
+  planDisplayName String?  @map("plan_display_name")
+  isActive       Boolean   @default(true) @map("is_active")
+  uninstalledAt  DateTime? @map("uninstalled_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  organization       Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  connection         ShopifyConnection?
+  jobs               Job[]
+  files              FileObject[]
+  templates          Template[]
+  fieldMappings      FieldMapping[]
+  scheduledJobs      ScheduledJob[]
+  backups            Backup[]
+  auditLogs          AuditLog[]
+  notifications      Notification[]
+  usageRecords       UsageRecord[]
+  resourceMappings   ResourceMapping[]
+
+  @@index([organizationId])
+  @@map("stores")
+}
+
+model ShopifyConnection {
+  id                    String    @id @default(uuid()) @db.Uuid
+  storeId               String    @unique @map("store_id") @db.Uuid
+  accessTokenEncrypted  String    @map("access_token_encrypted")
+  scope                 String
+  installedAt           DateTime  @default(now()) @map("installed_at")
+  lastVerifiedAt        DateTime? @map("last_verified_at")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@map("shopify_connections")
+}
+
+model Job {
+  id                 String    @id @default(uuid()) @db.Uuid
+  organizationId     String    @map("organization_id") @db.Uuid
+  storeId            String    @map("store_id") @db.Uuid
+  createdById        String?   @map("created_by_id") @db.Uuid
+  type               JobType
+  dataset            Dataset
+  status             JobStatus @default(QUEUED)
+  startedAt          DateTime? @map("started_at")
+  completedAt        DateTime? @map("completed_at")
+  totalRecords       Int       @default(0) @map("total_records")
+  processedRecords   Int       @default(0) @map("processed_records")
+  successfulRecords  Int       @default(0) @map("successful_records")
+  failedRecords      Int       @default(0) @map("failed_records")
+  createdRecords     Int       @default(0) @map("created_records")
+  updatedRecords     Int       @default(0) @map("updated_records")
+  skippedRecords     Int       @default(0) @map("skipped_records")
+  errorCount         Int       @default(0) @map("error_count")
+  progressPercent    Int       @default(0) @map("progress_percent")
+  inputFileId        String?   @map("input_file_id") @db.Uuid
+  outputFileId       String?   @map("output_file_id") @db.Uuid
+  errorFileId        String?   @map("error_file_id") @db.Uuid
+  config             Json?
+  mapping            Json?
+  previewSummary     Json?     @map("preview_summary")
+  shopifyBulkOpId    String?   @map("shopify_bulk_op_id")
+  logs               Json?
+  cancelRequested    Boolean   @default(false) @map("cancel_requested")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  store        Store        @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  createdBy    User?        @relation("JobCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  inputFile    FileObject?  @relation("JobInputFile", fields: [inputFileId], references: [id], onDelete: SetNull)
+  outputFile   FileObject?  @relation("JobOutputFile", fields: [outputFileId], references: [id], onDelete: SetNull)
+  errorFile    FileObject?  @relation("JobErrorFile", fields: [errorFileId], references: [id], onDelete: SetNull)
+  records      JobRecord[]
+  errors       JobError[]
+
+  @@index([organizationId, createdAt])
+  @@index([storeId, status])
+  @@index([status, createdAt])
+  @@map("jobs")
+}
+
+model JobRecord {
+  id              String          @id @default(uuid()) @db.Uuid
+  jobId           String          @map("job_id") @db.Uuid
+  rowNumber       Int             @map("row_number")
+  idempotencyKey  String          @map("idempotency_key")
+  status          JobRecordStatus @default(PENDING)
+  shopifyGid      String?         @map("shopify_gid")
+  recordHash      String?         @map("record_hash")
+  payload         Json?
+  result          Json?
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+
+  job Job @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@unique([jobId, idempotencyKey])
+  @@index([jobId, status])
+  @@map("job_records")
+}
+
+model JobError {
+  id            String   @id @default(uuid()) @db.Uuid
+  jobId         String   @map("job_id") @db.Uuid
+  rowNumber     Int?     @map("row_number")
+  field         String?
+  value         String?
+  message       String
+  suggestedFix  String?  @map("suggested_fix")
+  raw           Json?
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  job Job @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([jobId])
+  @@map("job_errors")
+}
+
+model FileObject {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  storeId        String?  @map("store_id") @db.Uuid
+  kind           FileKind
+  filename       String
+  contentType    String   @map("content_type")
+  sizeBytes      BigInt   @map("size_bytes")
+  storageKey     String   @map("storage_key")
+  checksum       String?
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  store        Store?       @relation(fields: [storeId], references: [id], onDelete: SetNull)
+  jobsAsInput  Job[]        @relation("JobInputFile")
+  jobsAsOutput Job[]        @relation("JobOutputFile")
+  jobsAsError  Job[]        @relation("JobErrorFile")
+  backupFiles  BackupFile[]
+
+  @@index([organizationId, createdAt])
+  @@map("files")
+}
+
+model Template {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  storeId        String?  @map("store_id") @db.Uuid
+  name           String
+  dataset        Dataset
+  columns        Json
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  store        Store?       @relation(fields: [storeId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId])
+  @@map("templates")
+}
+
+model FieldMapping {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  storeId        String?  @map("store_id") @db.Uuid
+  name           String
+  dataset        Dataset
+  mappings       Json
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  store        Store?       @relation(fields: [storeId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, dataset])
+  @@map("field_mappings")
+}
+
+model Transformation {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  name           String
+  rules          Json
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@index([organizationId])
+  @@map("transformations")
+}
+
+model ScheduledJob {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  storeId        String    @map("store_id") @db.Uuid
+  name           String
+  jobType        JobType   @map("job_type")
+  cronExpression String    @map("cron_expression")
+  timezone       String    @default("UTC")
+  enabled        Boolean   @default(true)
+  config         Json?
+  lastRunAt      DateTime? @map("last_run_at")
+  nextRunAt      DateTime? @map("next_run_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  store        Store        @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@index([enabled, nextRunAt])
+  @@map("scheduled_jobs")
+}
+
+model Backup {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  storeId        String   @map("store_id") @db.Uuid
+  label          String?
+  datasets       Json
+  status         JobStatus @default(QUEUED)
+  createdAt      DateTime @default(now()) @map("created_at")
+  completedAt    DateTime? @map("completed_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  store        Store        @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  files        BackupFile[]
+
+  @@index([storeId, createdAt])
+  @@map("backups")
+}
+
+model BackupFile {
+  id         String @id @default(uuid()) @db.Uuid
+  backupId   String @map("backup_id") @db.Uuid
+  fileId     String @map("file_id") @db.Uuid
+  dataset    Dataset
+
+  backup Backup     @relation(fields: [backupId], references: [id], onDelete: Cascade)
+  file   FileObject @relation(fields: [fileId], references: [id], onDelete: Cascade)
+
+  @@map("backup_files")
+}
+
+model AuditLog {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  storeId        String?  @map("store_id") @db.Uuid
+  userId         String?  @map("user_id") @db.Uuid
+  action         String
+  resourceType   String?  @map("resource_type")
+  resourceId     String?  @map("resource_id")
+  metadata       Json?
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  store        Store?       @relation(fields: [storeId], references: [id], onDelete: SetNull)
+  user         User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, createdAt])
+  @@map("audit_logs")
+}
+
+model Notification {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  storeId        String?  @map("store_id") @db.Uuid
+  userId         String?  @map("user_id") @db.Uuid
+  title          String
+  body           String
+  readAt         DateTime? @map("read_at")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  store        Store?       @relation(fields: [storeId], references: [id], onDelete: SetNull)
+  user         User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId, readAt])
+  @@map("notifications")
+}
+
+model ResourceMapping {
+  id              String   @id @default(uuid()) @db.Uuid
+  storeId         String   @map("store_id") @db.Uuid
+  sourceStoreId   String   @map("source_store_id") @db.Uuid
+  resourceType    String   @map("resource_type")
+  sourceId        String   @map("source_id")
+  destinationId   String   @map("destination_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@unique([storeId, sourceStoreId, resourceType, sourceId])
+  @@map("resource_mappings")
+}
