@@ -122,9 +122,13 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ jobId: job.id });
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Start failed" },
-      { status: 500 },
-    );
+    console.error("[imports/start]", error);
+    const message =
+      error instanceof Error
+        ? error.message || error.name || "Start failed"
+        : typeof error === "string"
+          ? error
+          : "Start failed";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
