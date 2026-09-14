@@ -1,6 +1,8 @@
+import { createHash } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { Prisma, prisma } from "@shopdata/db";
 import { enqueueJob } from "@shopdata/jobs";
+import { buildStorageKey, putObject } from "@shopdata/storage";
 import type { FieldMappingEntry } from "@shopdata/shared";
 
 export async function POST(req: NextRequest) {
@@ -31,6 +33,32 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const filename = body.filename ?? "upload.csv";
+    const storageKey = buildStorageKey({
+      organizationId: store.organizationId,
+      kind: "upload",
+      filename,
+    });
+    const stored = await putObject({
+      key: storageKey,
+      body: body.csvContent,
+      contentType: "text/csv",
+    });
+    const inputFile = await prisma.fileObject.create({
+      data: {
+        organizationId: store.organizationId,
+        storeId: store.id,
+        kind: "UPLOAD",
+        filename,
+        contentType: "text/csv",
+        sizeBytes: BigInt(stored.sizeBytes),
+        storageKey: stored.key,
+        checksum: createHash("sha256")
+          .update(body.csvContent)
+          .digest("hex"),
+      },
+    });
+
     const job = await prisma.job.create({
       data: {
         organizationId: store.organizationId,
@@ -38,11 +66,14 @@ export async function POST(req: NextRequest) {
         type: "PRODUCT_IMPORT",
         dataset: "PRODUCTS",
         status: "QUEUED",
+        inputFileId: inputFile.id,
         mapping: body.mappings as unknown as Prisma.InputJsonValue,
         config: {
+          // Keep inline content for small jobs / retry; worker prefers inputFile.
           csvContent: body.csvContent,
-          filename: body.filename ?? "upload.csv",
+          filename,
           mappings: body.mappings,
+          storageKey: stored.key,
         } as unknown as Prisma.InputJsonValue,
       },
     });

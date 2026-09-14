@@ -276,6 +276,279 @@ export const PRODUCTS_BULK_EXPORT_QUERY = `
 }
 `;
 
+export const STAGED_UPLOADS_CREATE = `#graphql
+  mutation StagedUploadsCreate($input: [StagedUploadInput!]!) {
+    stagedUploadsCreate(input: $input) {
+      stagedTargets {
+        url
+        resourceUrl
+        parameters {
+          name
+          value
+        }
+      }
+      userErrors {
+        field
+        message
+      }
+    }
+  }
+`;
+
+export const BULK_OPERATION_RUN_MUTATION = `#graphql
+  mutation BulkOperationRunMutation($mutation: String!, $stagedUploadPath: String!) {
+    bulkOperationRunMutation(mutation: $mutation, stagedUploadPath: $stagedUploadPath) {
+      bulkOperation {
+        id
+        status
+      }
+      userErrors {
+        field
+        message
+      }
+    }
+  }
+`;
+
+/** Product set mutation used by bulk imports. */
+export const PRODUCT_SET_BULK_MUTATION = `
+mutation productSet($input: ProductSetInput!) {
+  productSet(input: $input) {
+    product {
+      id
+      handle
+    }
+    userErrors {
+      field
+      message
+      code
+    }
+  }
+}
+`;
+
+export type StagedUploadTarget = {
+  url: string;
+  resourceUrl?: string | null;
+  parameters: Array<{ name: string; value: string }>;
+};
+
+export async function createStagedUpload(
+  client: ShopifyGraphQLClient,
+  filename = "bulk-mutations.jsonl",
+): Promise<StagedUploadTarget> {
+  const data = await client.request<{
+    stagedUploadsCreate: {
+      stagedTargets: StagedUploadTarget[];
+      userErrors: Array<{ message: string }>;
+    };
+  }>(STAGED_UPLOADS_CREATE, {
+    input: [
+      {
+        resource: "BULK_MUTATION_VARIABLES",
+        filename,
+        mimeType: "text/jsonl",
+        httpMethod: "POST",
+      },
+    ],
+  });
+
+  if (data.stagedUploadsCreate.userErrors.length) {
+    throw new AppError(
+      data.stagedUploadsCreate.userErrors.map((e) => e.message).join("; "),
+      "STAGED_UPLOAD_ERROR",
+      502,
+    );
+  }
+
+  const target = data.stagedUploadsCreate.stagedTargets[0];
+  if (!target) {
+    throw new AppError("No staged upload target returned", "STAGED_UPLOAD_EMPTY", 502);
+  }
+  return target;
+}
+
+export async function uploadToStagedTarget(
+  target: StagedUploadTarget,
+  body: string | Buffer,
+): Promise<string> {
+  const form = new FormData();
+  for (const param of target.parameters) {
+    form.append(param.name, param.value);
+  }
+  const bytes =
+    typeof body === "string" ? body : new Uint8Array(body);
+  const blob = new Blob([bytes], { type: "text/jsonl" });
+  form.append("file", blob, "bulk-mutations.jsonl");
+
+  const res = await fetch(target.url, {
+    method: "POST",
+    body: form,
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new AppError(
+      `Staged upload failed (${res.status}): ${text}`,
+      "STAGED_UPLOAD_HTTP",
+      502,
+    );
+  }
+
+  const keyParam = target.parameters.find((p) => p.name === "key");
+  if (!keyParam?.value) {
+    throw new AppError("Staged upload missing key parameter", "STAGED_UPLOAD_KEY", 502);
+  }
+  return keyParam.value;
+}
+
+export async function runBulkMutation(
+  client: ShopifyGraphQLClient,
+  stagedUploadPath: string,
+  mutation = PRODUCT_SET_BULK_MUTATION,
+): Promise<{ id: string; status: string }> {
+  const data = await client.request<{
+    bulkOperationRunMutation: {
+      bulkOperation: { id: string; status: string } | null;
+      userErrors: Array<{ message: string }>;
+    };
+  }>(BULK_OPERATION_RUN_MUTATION, {
+    mutation,
+    stagedUploadPath,
+  });
+
+  if (data.bulkOperationRunMutation.userErrors.length) {
+    throw new AppError(
+      data.bulkOperationRunMutation.userErrors.map((e) => e.message).join("; "),
+      "BULK_MUTATION_ERROR",
+      502,
+    );
+  }
+
+  const op = data.bulkOperationRunMutation.bulkOperation;
+  if (!op) {
+    throw new AppError("No bulk operation returned", "BULK_MUTATION_EMPTY", 502);
+  }
+  return op;
+}
+
+export type BulkOperationStatus = {
+  id: string;
+  status: string;
+  errorCode?: string | null;
+  objectCount?: string | null;
+  url?: string | null;
+  partialDataUrl?: string | null;
+};
+
+export async function pollBulkOperation(
+  client: ShopifyGraphQLClient,
+  options?: {
+    maxAttempts?: number;
+    intervalMs?: number;
+    shouldCancel?: () => Promise<boolean>;
+    onProgress?: (attempt: number, op: BulkOperationStatus | null) => Promise<void>;
+  },
+): Promise<BulkOperationStatus> {
+  const maxAttempts = options?.maxAttempts ?? 90;
+  const intervalMs = options?.intervalMs ?? 2000;
+
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    if (options?.shouldCancel && (await options.shouldCancel())) {
+      throw new AppError("Bulk operation cancelled", "BULK_CANCELLED", 409);
+    }
+
+    const data = await client.request<{
+      currentBulkOperation: BulkOperationStatus | null;
+    }>(CURRENT_BULK_OPERATION);
+
+    const op = data.currentBulkOperation;
+    if (options?.onProgress) {
+      await options.onProgress(attempt, op);
+    }
+
+    if (!op) {
+      await sleep(intervalMs);
+      continue;
+    }
+
+    if (op.status === "COMPLETED") return op;
+    if (op.status === "FAILED" || op.status === "CANCELED") {
+      throw new AppError(
+        `Bulk operation ${op.status}${op.errorCode ? `: ${op.errorCode}` : ""}`,
+        "BULK_FAILED",
+        502,
+        op,
+      );
+    }
+
+    await sleep(intervalMs);
+  }
+
+  throw new AppError("Bulk operation poll timeout", "BULK_TIMEOUT", 504);
+}
+
+export async function downloadText(url: string): Promise<string> {
+  const res = await fetch(url);
+  if (!res.ok) {
+    throw new AppError(`Failed to download ${url} (${res.status})`, "DOWNLOAD_FAILED", 502);
+  }
+  return res.text();
+}
+
+export type BulkMutationResultLine = {
+  data?: {
+    productSet?: {
+      product?: { id?: string; handle?: string } | null;
+      userErrors?: Array<{ field?: string[] | null; message: string; code?: string }>;
+    };
+  };
+  errors?: Array<{ message: string }>;
+};
+
+export function parseBulkMutationResults(jsonl: string): Array<{
+  index: number;
+  success: boolean;
+  productId?: string;
+  handle?: string;
+  errors: string[];
+}> {
+  const results: Array<{
+    index: number;
+    success: boolean;
+    productId?: string;
+    handle?: string;
+    errors: string[];
+  }> = [];
+
+  jsonl.split("\n").forEach((line, index) => {
+    if (!line.trim()) return;
+    const parsed = JSON.parse(line) as BulkMutationResultLine;
+    const productSet = parsed.data?.productSet;
+    const userErrors = productSet?.userErrors ?? [];
+    const topErrors = parsed.errors ?? [];
+    const errors = [
+      ...userErrors.map((e) => e.message),
+      ...topErrors.map((e) => e.message),
+    ];
+    results.push({
+      index,
+      success: errors.length === 0 && Boolean(productSet?.product?.id),
+      productId: productSet?.product?.id,
+      handle: productSet?.product?.handle,
+      errors,
+    });
+  });
+
+  return results;
+}
+
+/** True when we should skip live Shopify writes (demo token / explicit dry-run). */
+export function shouldDryRunShopifyWrites(accessToken: string): boolean {
+  if (process.env.SHOPDATA_DRY_RUN === "true") return true;
+  return /demo|not_a_real|placeholder/i.test(accessToken);
+}
+
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }

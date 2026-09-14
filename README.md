@@ -55,3 +55,4 @@ Web: http://localhost:3000
 | `packages/shopify` | OAuth + GraphQL client |
 | `packages/files` | Parse / map / validate |
 | `packages/jobs` | Queue producers/consumers |
+| `packages/storage` | Local disk / S3 object storage |

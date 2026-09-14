@@ -214,3 +214,250 @@ export function detectDataset(columns: string[]): "PRODUCTS" | "UNKNOWN" {
   ).length;
   return hits >= 2 ? "PRODUCTS" : "UNKNOWN";
 }
+
+export type ProductSetInput = {
+  handle: string;
+  title: string;
+  descriptionHtml?: string;
+  vendor?: string;
+  productType?: string;
+  tags?: string[];
+  status?: "ACTIVE" | "DRAFT" | "ARCHIVED";
+  seo?: { title?: string; description?: string };
+  variants?: Array<{
+    sku?: string;
+    price?: string;
+    compareAtPrice?: string;
+    barcode?: string;
+    inventoryQuantities?: Array<{
+      name: string;
+      quantity: number;
+    }>;
+  }>;
+};
+
+function mappedValue(
+  row: Record<string, string>,
+  mappings: FieldMappingEntry[],
+  targetField: string,
+): string | undefined {
+  const mapping = mappings.find((m) => m.targetField === targetField);
+  if (!mapping) return undefined;
+  const value = (row[mapping.sourceColumn] ?? "").trim();
+  return value || undefined;
+}
+
+/** Convert a CSV row + mappings into a Shopify productSet input. */
+export function rowToProductSetInput(
+  row: Record<string, string>,
+  mappings: FieldMappingEntry[],
+): ProductSetInput | null {
+  const handle = mappedValue(row, mappings, "product.handle");
+  const title = mappedValue(row, mappings, "product.title");
+  if (!handle || !title) return null;
+
+  const statusRaw = mappedValue(row, mappings, "product.status")?.toUpperCase();
+  const status =
+    statusRaw === "ACTIVE" || statusRaw === "DRAFT" || statusRaw === "ARCHIVED"
+      ? statusRaw
+      : undefined;
+
+  const tagsRaw = mappedValue(row, mappings, "product.tags");
+  const tags = tagsRaw
+    ? tagsRaw.split(",").map((t) => t.trim()).filter(Boolean)
+    : undefined;
+
+  const sku = mappedValue(row, mappings, "variant.sku");
+  const price = mappedValue(row, mappings, "variant.price");
+  const compareAtPrice = mappedValue(row, mappings, "variant.compareAtPrice");
+  const barcode = mappedValue(row, mappings, "variant.barcode");
+  const inventoryRaw = mappedValue(row, mappings, "variant.inventoryQuantity");
+  const inventoryQuantity =
+    inventoryRaw !== undefined && inventoryRaw !== "" && !Number.isNaN(Number(inventoryRaw))
+      ? Number(inventoryRaw)
+      : undefined;
+
+  const hasVariant =
+    sku || price || compareAtPrice || barcode || inventoryQuantity !== undefined;
+
+  const seoTitle = mappedValue(row, mappings, "product.seoTitle");
+  const seoDescription = mappedValue(row, mappings, "product.seoDescription");
+
+  const input: ProductSetInput = {
+    handle,
+    title,
+    descriptionHtml: mappedValue(row, mappings, "product.bodyHtml"),
+    vendor: mappedValue(row, mappings, "product.vendor"),
+    productType: mappedValue(row, mappings, "product.productType"),
+    tags,
+    status,
+  };
+
+  if (seoTitle || seoDescription) {
+    input.seo = {
+      title: seoTitle,
+      description: seoDescription,
+    };
+  }
+
+  if (hasVariant) {
+    input.variants = [
+      {
+        sku,
+        price,
+        compareAtPrice,
+        barcode,
+        inventoryQuantities:
+          inventoryQuantity === undefined
+            ? undefined
+            : [
+                {
+                  name: "available",
+                  quantity: inventoryQuantity,
+                },
+              ],
+      },
+    ];
+  }
+
+  return input;
+}
+
+export function buildProductSetJsonl(
+  rows: Record<string, string>[],
+  mappings: FieldMappingEntry[],
+  options?: { skipRows?: Set<number> },
+): { jsonl: string; includedRowNumbers: number[]; skipped: number } {
+  const lines: string[] = [];
+  const includedRowNumbers: number[] = [];
+  let skipped = 0;
+
+  rows.forEach((row, index) => {
+    const rowNumber = index + 2;
+    if (options?.skipRows?.has(rowNumber)) {
+      skipped += 1;
+      return;
+    }
+    const input = rowToProductSetInput(row, mappings);
+    if (!input) {
+      skipped += 1;
+      return;
+    }
+    lines.push(JSON.stringify({ input }));
+    includedRowNumbers.push(rowNumber);
+  });
+
+  return {
+    jsonl: lines.join("\n") + (lines.length ? "\n" : ""),
+    includedRowNumbers,
+    skipped,
+  };
+}
+
+export function buildErrorReportCsv(
+  errors: Array<{
+    rowNumber?: number | null;
+    field?: string | null;
+    value?: string | null;
+    message: string;
+    suggestedFix?: string | null;
+  }>,
+): string {
+  const escape = (value: string) => `"${value.replaceAll('"', '""')}"`;
+  const header = ["Row", "Field", "Value", "Error", "Suggested Fix"];
+  const lines = [
+    header.join(","),
+    ...errors.map((error) =>
+      [
+        String(error.rowNumber ?? ""),
+        escape(error.field ?? ""),
+        escape(error.value ?? ""),
+        escape(error.message),
+        escape(error.suggestedFix ?? ""),
+      ].join(","),
+    ),
+  ];
+  return lines.join("\n");
+}
+
+/** Flatten Shopify product bulk-export JSONL into CSV rows. */
+export function productExportJsonlToCsv(jsonl: string): string {
+  type Node = Record<string, unknown> & {
+    id?: string;
+    handle?: string;
+    title?: string;
+    __parentId?: string;
+  };
+
+  const products = new Map<string, Node>();
+  const variants: Node[] = [];
+
+  for (const line of jsonl.split("\n")) {
+    if (!line.trim()) continue;
+    const node = JSON.parse(line) as Node;
+    if (typeof node.id === "string" && node.id.includes("Product/") && !node.id.includes("ProductVariant")) {
+      products.set(node.id, node);
+    } else if (typeof node.id === "string" && node.id.includes("ProductVariant")) {
+      variants.push(node);
+    }
+  }
+
+  const header = [
+    "Handle",
+    "Title",
+    "Vendor",
+    "Product Type",
+    "Tags",
+    "Status",
+    "SKU",
+    "Price",
+    "Compare At Price",
+    "Barcode",
+    "Inventory Quantity",
+  ];
+  const escape = (value: unknown) =>
+    `"${String(value ?? "").replaceAll('"', '""')}"`;
+
+  const rows: string[] = [header.join(",")];
+  if (variants.length === 0) {
+    for (const product of products.values()) {
+      rows.push(
+        [
+          escape(product.handle),
+          escape(product.title),
+          escape(product.vendor),
+          escape(product.productType),
+          escape(Array.isArray(product.tags) ? product.tags.join(", ") : product.tags),
+          escape(product.status),
+          '""',
+          '""',
+          '""',
+          '""',
+          '""',
+        ].join(","),
+      );
+    }
+  } else {
+    for (const variant of variants) {
+      const parentId = String(variant.__parentId ?? "");
+      const product = products.get(parentId) ?? {};
+      rows.push(
+        [
+          escape(product.handle),
+          escape(product.title),
+          escape(product.vendor),
+          escape(product.productType),
+          escape(Array.isArray(product.tags) ? product.tags.join(", ") : product.tags),
+          escape(product.status),
+          escape(variant.sku),
+          escape(variant.price),
+          escape(variant.compareAtPrice),
+          escape(variant.barcode),
+          escape(variant.inventoryQuantity),
+        ].join(","),
+      );
+    }
+  }
+
+  return rows.join("\n");
+}

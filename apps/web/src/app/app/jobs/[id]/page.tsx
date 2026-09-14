@@ -67,6 +67,25 @@ export default async function JobDetailPage({
         failedRecords={job.failedRecords}
       />
 
+      <div className="flex flex-wrap gap-3 text-sm">
+        {job.errorFileId || job.errors.length > 0 ? (
+          <a
+            href={`/api/jobs/${job.id}/errors.csv`}
+            className="rounded-lg border border-ink-300 bg-white px-4 py-2 font-semibold hover:border-accent"
+          >
+            Download error report
+          </a>
+        ) : null}
+        {job.outputFileId ? (
+          <a
+            href={`/api/jobs/${job.id}/download`}
+            className="rounded-lg bg-ink-900 px-4 py-2 font-semibold text-white"
+          >
+            Download export file
+          </a>
+        ) : null}
+      </div>
+
       {job.errors.length > 0 && (
         <section className="rounded-2xl border border-ink-100 bg-white/80 p-5">
           <h2 className="text-lg font-semibold">Errors</h2>

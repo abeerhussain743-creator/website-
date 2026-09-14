@@ -4,6 +4,7 @@ import {
   detectDataset,
   parseCsv,
   validateProductRows,
+  buildProductSetJsonl,
 } from "./index.js";
 
 const sample = `Handle,Title,Vendor,SKU,Price
@@ -47,5 +48,19 @@ describe("validateProductRows", () => {
 describe("detectDataset", () => {
   it("detects products", () => {
     expect(detectDataset(["Handle", "Title", "Price"])).toBe("PRODUCTS");
+  });
+});
+
+describe("buildProductSetJsonl", () => {
+  it("builds productSet JSONL lines", async () => {
+    
+    const table = parseCsv(sample);
+    const mappings = autoMapColumns(table.columns);
+    const { jsonl, includedRowNumbers } = buildProductSetJsonl(table.rows, mappings, {
+      skipRows: new Set([3]),
+    });
+    expect(includedRowNumbers).toContain(2);
+    expect(jsonl).toContain('"handle":"blue-shirt"');
+    expect(jsonl.split("\n").filter(Boolean)).toHaveLength(includedRowNumbers.length);
   });
 });

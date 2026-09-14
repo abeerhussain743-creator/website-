@@ -2,7 +2,7 @@
   "name": "shopdata",
   "private": true,
   "version": "0.1.0",
-  "description": "ShopData — Shopify data management SaaS",
+  "description": "ShopData \u2014 Shopify data management SaaS",
   "workspaces": [
     "apps/*",
     "packages/*"
@@ -10,7 +10,7 @@
   "scripts": {
     "dev": "npm run dev -w @shopdata/web",
     "dev:worker": "npm run dev -w @shopdata/worker",
-    "build": "npm run build -w @shopdata/db && npm run build -w @shopdata/shared && npm run build -w @shopdata/shopify && npm run build -w @shopdata/files && npm run build -w @shopdata/jobs && npm run build -w @shopdata/web && npm run build -w @shopdata/worker",
+    "build": "npm run build -w @shopdata/db && npm run build -w @shopdata/shared && npm run build -w @shopdata/shopify && npm run build -w @shopdata/files && npm run build -w @shopdata/storage && npm run build -w @shopdata/jobs && npm run build -w @shopdata/web && npm run build -w @shopdata/worker",
     "db:generate": "npm run generate -w @shopdata/db",
     "db:migrate": "npm run migrate -w @shopdata/db",
     "db:push": "npm run push -w @shopdata/db",

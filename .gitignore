@@ -13,3 +13,4 @@ tmp/
 .DS_Store
 packages/db/prisma/*.db
 packages/db/prisma/*.db-journal
+.data/
