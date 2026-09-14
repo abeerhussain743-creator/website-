@@ -1,0 +1,28 @@
+{
+  "name": "@shopdata/worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@shopdata/db": "*",
+    "@shopdata/files": "*",
+    "@shopdata/jobs": "*",
+    "@shopdata/shared": "*",
+    "@shopdata/shopify": "*",
+    "bullmq": "^5.41.0",
+    "dotenv": "^16.4.7",
+    "ioredis": "^5.5.0",
+    "@shopdata/storage": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.10",
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.2"
+  }
+}
