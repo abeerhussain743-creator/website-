@@ -16,7 +16,7 @@ from product_scraper.models import EXCEL_COLUMNS, ProductRecord, ScrapeFailure
 
 logger = logging.getLogger("product_scraper")
 
-HEADER_FILL = PatternFill("solid", fgColor="0B1F3D")
+HEADER_FILL = PatternFill("solid", fgColor="162535")
 HEADER_FONT = Font(color="FFFFFF", bold=True)
 CHANGED_FILL = PatternFill("solid", fgColor="D6E4FF")
 FAIL_FILL = PatternFill("solid", fgColor="FCE4EC")
