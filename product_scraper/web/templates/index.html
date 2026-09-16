@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Sora:wght@500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/css/app.css" />
+  <link rel="stylesheet" href="/static/css/app.css?v=20260916b" />
 </head>
 <body>
   <div class="atmosphere" aria-hidden="true"></div>
@@ -45,7 +45,7 @@
             <span>Product / store URLs</span>
             <span class="hint">One per line</span>
           </span>
-          <textarea id="urls" name="urls" rows="7" placeholder="https://floorscenter.com/&#10;https://floorscenter.com/products/example-plank" required></textarea>
+          <textarea id="urls" name="urls" rows="7" placeholder="https://example.com/&#10;https://example.com/products/sample-item" required></textarea>
         </label>
 
         <div class="power-grid">
@@ -240,6 +240,6 @@
   <script>
     window.VARIANTXL_PRESETS = {{ presets | tojson }};
   </script>
-  <script src="/static/js/app.js"></script>
+  <script src="/static/js/app.js?v=20260916b"></script>
 </body>
 </html>
