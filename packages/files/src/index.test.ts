@@ -5,6 +5,11 @@ import {
   parseCsv,
   validateProductRows,
   buildProductSetJsonl,
+  applyBulkUpdateToProducts,
+  demoProductsForDryRun,
+  csvOrTableToXlsx,
+  parseSpreadsheet,
+  buildImportPreviewSummary,
 } from "./index.js";
 
 const sample = `Handle,Title,Vendor,SKU,Price
@@ -52,15 +57,51 @@ describe("detectDataset", () => {
 });
 
 describe("buildProductSetJsonl", () => {
-  it("builds productSet JSONL lines", async () => {
-    
+  it("builds productSet JSONL lines", () => {
     const table = parseCsv(sample);
     const mappings = autoMapColumns(table.columns);
-    const { jsonl, includedRowNumbers } = buildProductSetJsonl(table.rows, mappings, {
-      skipRows: new Set([3]),
-    });
+    const { jsonl, includedRowNumbers } = buildProductSetJsonl(
+      table.rows,
+      mappings,
+      {
+        skipRows: new Set([3]),
+      },
+    );
     expect(includedRowNumbers).toContain(2);
     expect(jsonl).toContain('"handle":"blue-shirt"');
-    expect(jsonl.split("\n").filter(Boolean)).toHaveLength(includedRowNumbers.length);
+    expect(jsonl.split("\n").filter(Boolean)).toHaveLength(
+      includedRowNumbers.length,
+    );
+  });
+});
+
+describe("applyBulkUpdateToProducts", () => {
+  it("applies percent price increase", () => {
+    const { products, changed } = applyBulkUpdateToProducts(
+      demoProductsForDryRun(),
+      { field: "price", mode: "percent", value: "10" },
+    );
+    expect(changed).toBeGreaterThan(0);
+    expect(products[0]?.variants[0]?.price).toBe("21.99");
+  });
+});
+
+describe("xlsx roundtrip", () => {
+  it("writes and reads xlsx", () => {
+    const table = parseCsv(sample);
+    const bytes = csvOrTableToXlsx(table);
+    const parsed = parseSpreadsheet(bytes, "products.xlsx");
+    expect(parsed.columns).toContain("Handle");
+    expect(parsed.rows.length).toBe(3);
+  });
+});
+
+describe("buildImportPreviewSummary", () => {
+  it("counts duplicate handles as updates", () => {
+    const table = parseCsv(sample);
+    const mappings = autoMapColumns(table.columns);
+    const issues = validateProductRows(table.rows, mappings);
+    const preview = buildImportPreviewSummary(table.rows, mappings, issues);
+    expect(preview.updates).toBeGreaterThanOrEqual(1);
   });
 });

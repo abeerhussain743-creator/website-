@@ -26,6 +26,7 @@ npm install
 npm run db:generate
 npm run db:push
 npm run db:seed
+npm run db:seed:demo
 
 # 3. App
 npm run dev
@@ -38,11 +39,14 @@ Web: http://localhost:3000
 
 ## MVP scope
 
-- Shopify OAuth + store connection
+- Shopify OAuth + store connection (demo seed supported)
 - Dashboard
-- Product import / export / bulk update
-- Field mapping, validation, preview
-- Background jobs, progress, errors, retry
+- Product import (CSV / XLSX) with field mapping, validation, preview
+- Product export (CSV / XLSX) via Bulk Operations
+- Product bulk update (price / compare-at / inventory / status / tags)
+- Background jobs, progress, error reports, retry failed rows
+- Local disk or S3/MinIO artifact storage
+- Dry-run mode for demo tokens / `SHOPDATA_DRY_RUN=true`
 
 ## Workspaces
 
@@ -53,6 +57,15 @@ Web: http://localhost:3000
 | `packages/db` | Prisma schema |
 | `packages/shared` | Shared types/utils |
 | `packages/shopify` | OAuth + GraphQL client |
-| `packages/files` | Parse / map / validate |
+| `packages/files` | Parse / map / validate / XLSX |
 | `packages/jobs` | Queue producers/consumers |
 | `packages/storage` | Local disk / S3 object storage |
+
+## Demo
+
+```bash
+npm run db:seed:demo
+# Then open http://localhost:3000/app/stores and use the Demo Store.
+# Imports/exports/bulk-updates run in dry-run mode for the demo token.
+```
+

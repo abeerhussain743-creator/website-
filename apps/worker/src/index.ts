@@ -14,6 +14,11 @@ import {
   buildProductSetJsonl,
   buildErrorReportCsv,
   productExportJsonlToCsv,
+  parseProductExportJsonl,
+  applyBulkUpdateToProducts,
+  buildBulkUpdateProductSetJsonl,
+  demoProductsForDryRun,
+  csvOrTableToXlsx,
 } from "@shopdata/files";
 import {
   ShopifyGraphQLClient,
@@ -461,12 +466,44 @@ async function processExport(payload: JobPayload) {
     data: { status: "PROCESSING", startedAt: new Date(), progressPercent: 5 },
   });
 
+  const job = await prisma.job.findUniqueOrThrow({
+    where: { id: payload.jobId },
+  });
+  const format = String(
+    ((job.config as { format?: string } | null)?.format ?? "CSV"),
+  ).toUpperCase();
+  const wantXlsx = format === "XLSX" || format === "XLS";
+
   const { client, dryRun } = await getStoreClient(payload.storeId);
 
-  if (dryRun) {
-    const csv =
-      "Handle,Title,Vendor,Product Type,Tags,Status,SKU,Price,Compare At Price,Barcode,Inventory Quantity\n" +
-      "demo-product,Demo Product,ShopData,Demo,demo,ACTIVE,DEMO-1,19.99,,,\n";
+  const persistExport = async (csv: string, objectCount: number, logs: object) => {
+    if (wantXlsx) {
+      const xlsx = csvOrTableToXlsx(csv);
+      const outputFile = await persistFile({
+        organizationId: payload.organizationId,
+        storeId: payload.storeId,
+        kind: "EXPORT",
+        filename: `export-${payload.jobId}.xlsx`,
+        contentType:
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        body: xlsx,
+      });
+      await prisma.job.update({
+        where: { id: payload.jobId },
+        data: {
+          status: "COMPLETED",
+          completedAt: new Date(),
+          progressPercent: 100,
+          totalRecords: objectCount,
+          processedRecords: objectCount,
+          successfulRecords: objectCount,
+          outputFileId: outputFile.id,
+          logs: { ...logs, format: "XLSX" } as unknown as Prisma.InputJsonValue,
+        },
+      });
+      return;
+    }
+
     const outputFile = await persistFile({
       organizationId: payload.organizationId,
       storeId: payload.storeId,
@@ -481,13 +518,20 @@ async function processExport(payload: JobPayload) {
         status: "COMPLETED",
         completedAt: new Date(),
         progressPercent: 100,
-        totalRecords: 1,
-        processedRecords: 1,
-        successfulRecords: 1,
+        totalRecords: objectCount,
+        processedRecords: objectCount,
+        successfulRecords: objectCount,
         outputFileId: outputFile.id,
-        logs: { dryRun: true },
+        logs: { ...logs, format: "CSV" } as unknown as Prisma.InputJsonValue,
       },
     });
+  };
+
+  if (dryRun) {
+    const csv =
+      "Handle,Title,Vendor,Product Type,Tags,Status,SKU,Price,Compare At Price,Barcode,Inventory Quantity\n" +
+      "demo-product,Demo Product,ShopData,Demo,demo,ACTIVE,DEMO-1,19.99,,,\n";
+    await persistExport(csv, 1, { dryRun: true });
     return;
   }
 
@@ -536,31 +580,10 @@ async function processExport(payload: JobPayload) {
 
   const jsonl = completed.url ? await downloadText(completed.url) : "";
   const csv = productExportJsonlToCsv(jsonl);
-  const outputFile = await persistFile({
-    organizationId: payload.organizationId,
-    storeId: payload.storeId,
-    kind: "EXPORT",
-    filename: `export-${payload.jobId}.csv`,
-    contentType: "text/csv",
-    body: csv,
-  });
-
   const objectCount = Number(completed.objectCount ?? 0);
-  await prisma.job.update({
-    where: { id: payload.jobId },
-    data: {
-      status: "COMPLETED",
-      completedAt: new Date(),
-      progressPercent: 100,
-      totalRecords: objectCount,
-      processedRecords: objectCount,
-      successfulRecords: objectCount,
-      outputFileId: outputFile.id,
-      logs: {
-        downloadUrl: completed.url,
-        objectCount,
-      } as unknown as Prisma.InputJsonValue,
-    },
+  await persistExport(csv, objectCount, {
+    downloadUrl: completed.url,
+    objectCount,
   });
 }
 
@@ -573,12 +596,17 @@ async function processBulkUpdate(payload: JobPayload) {
       progressPercent: 5,
     },
   });
+  if (await markCancelledIfRequested(payload.jobId)) return;
 
   const job = await prisma.job.findUniqueOrThrow({
     where: { id: payload.jobId },
   });
   const config = job.config as {
-    operation?: { field: string; mode: string; value: string };
+    operation?: {
+      field: "price" | "compareAtPrice" | "inventoryQuantity" | "status" | "tags";
+      mode: "set" | "percent" | "add" | "subtract";
+      value: string;
+    };
   } | null;
 
   if (!config?.operation) {
@@ -593,15 +621,186 @@ async function processBulkUpdate(payload: JobPayload) {
     return;
   }
 
+  const { client, dryRun } = await getStoreClient(payload.storeId);
+  let products;
+
+  if (dryRun) {
+    products = demoProductsForDryRun();
+  } else {
+    const start = await client.request<{
+      bulkOperationRunQuery: {
+        bulkOperation: { id: string; status: string } | null;
+        userErrors: Array<{ message: string }>;
+      };
+    }>(BULK_OPERATION_RUN_QUERY, { query: PRODUCTS_BULK_EXPORT_QUERY });
+
+    if (start.bulkOperationRunQuery.userErrors.length) {
+      await prisma.job.update({
+        where: { id: payload.jobId },
+        data: {
+          status: "FAILED",
+          completedAt: new Date(),
+          logs: { errors: start.bulkOperationRunQuery.userErrors },
+        },
+      });
+      return;
+    }
+
+    await prisma.job.update({
+      where: { id: payload.jobId },
+      data: {
+        shopifyBulkOpId: start.bulkOperationRunQuery.bulkOperation?.id,
+        progressPercent: 20,
+      },
+    });
+
+    const completed = await pollBulkOperation(client, {
+      shouldCancel: async () => markCancelledIfRequested(payload.jobId),
+      onProgress: async (attempt) => {
+        await prisma.job.update({
+          where: { id: payload.jobId },
+          data: { progressPercent: Math.min(55, 20 + attempt) },
+        });
+      },
+    }).catch(async (error) => {
+      if (error instanceof AppError && error.code === "BULK_CANCELLED") {
+        return null;
+      }
+      throw error;
+    });
+    if (!completed) return;
+
+    const jsonl = completed.url ? await downloadText(completed.url) : "";
+    products = parseProductExportJsonl(jsonl);
+  }
+
+  const { products: updated, changed, unchanged } = applyBulkUpdateToProducts(
+    products,
+    config.operation,
+  );
+
   await prisma.job.update({
     where: { id: payload.jobId },
     data: {
-      status: "COMPLETED",
+      progressPercent: 60,
+      totalRecords: updated.length,
+      previewSummary: {
+        dataset: "PRODUCTS",
+        totalRows: updated.length,
+        creates: 0,
+        updates: changed,
+        unchanged,
+        errors: 0,
+        warnings: 0,
+      } as unknown as Prisma.InputJsonValue,
+    },
+  });
+
+  if (changed === 0) {
+    await prisma.job.update({
+      where: { id: payload.jobId },
+      data: {
+        status: "COMPLETED",
+        completedAt: new Date(),
+        progressPercent: 100,
+        processedRecords: updated.length,
+        successfulRecords: 0,
+        skippedRecords: unchanged,
+        updatedRecords: 0,
+        logs: {
+          dryRun,
+          note: "No product fields changed for this operation",
+          operation: config.operation,
+        } as unknown as Prisma.InputJsonValue,
+      },
+    });
+    return;
+  }
+
+  const { jsonl, count } = buildBulkUpdateProductSetJsonl(updated);
+
+  if (dryRun) {
+    await prisma.job.update({
+      where: { id: payload.jobId },
+      data: {
+        status: "COMPLETED",
+        completedAt: new Date(),
+        progressPercent: 100,
+        processedRecords: updated.length,
+        successfulRecords: count,
+        updatedRecords: changed,
+        skippedRecords: unchanged,
+        logs: {
+          dryRun: true,
+          operation: config.operation,
+          changed,
+          unchanged,
+          sample: updated.slice(0, 3),
+        } as unknown as Prisma.InputJsonValue,
+      },
+    });
+    return;
+  }
+
+  const staged = await createStagedUpload(
+    client,
+    `bulk-update-${payload.jobId}.jsonl`,
+  );
+  const stagedPath = await uploadToStagedTarget(staged, jsonl);
+  const bulkOp = await runBulkMutation(client, stagedPath);
+  await prisma.job.update({
+    where: { id: payload.jobId },
+    data: {
+      shopifyBulkOpId: bulkOp.id,
+      progressPercent: 75,
+    },
+  });
+
+  const writeCompleted = await pollBulkOperation(client, {
+    shouldCancel: async () => markCancelledIfRequested(payload.jobId),
+    onProgress: async (attempt) => {
+      await prisma.job.update({
+        where: { id: payload.jobId },
+        data: { progressPercent: Math.min(95, 75 + attempt) },
+      });
+    },
+  }).catch(async (error) => {
+    if (error instanceof AppError && error.code === "BULK_CANCELLED") {
+      return null;
+    }
+    throw error;
+  });
+  if (!writeCompleted) return;
+
+  const resultJsonl = writeCompleted.url
+    ? await downloadText(writeCompleted.url)
+    : "";
+  const results = parseBulkMutationResults(resultJsonl);
+  const successful = results.filter((r) => r.success).length;
+  const failed = results.length - successful;
+
+  await prisma.job.update({
+    where: { id: payload.jobId },
+    data: {
+      status:
+        failed > 0 && successful > 0
+          ? "PARTIALLY_COMPLETED"
+          : failed > 0
+            ? "FAILED"
+            : "COMPLETED",
       completedAt: new Date(),
       progressPercent: 100,
+      processedRecords: results.length || count,
+      successfulRecords: successful || (failed === 0 ? count : successful),
+      failedRecords: failed,
+      updatedRecords: successful || (failed === 0 ? changed : successful),
+      skippedRecords: unchanged,
       logs: {
-        note: "Bulk update plan recorded. Live transform apply uses productSet next.",
+        dryRun: false,
         operation: config.operation,
+        changed,
+        unchanged,
+        bulkOperationId: bulkOp.id,
       } as unknown as Prisma.InputJsonValue,
     },
   });
