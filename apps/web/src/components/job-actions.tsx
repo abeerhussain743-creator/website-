@@ -24,9 +24,19 @@ export function JobActions({
 
   async function retryFailed() {
     setBusy(true);
-    await fetch(`/api/jobs/${jobId}/retry-failed`, { method: "POST" });
-    router.refresh();
-    setBusy(false);
+    try {
+      const res = await fetch(`/api/jobs/${jobId}/retry-failed`, {
+        method: "POST",
+      });
+      const data = (await res.json()) as { jobId?: string; error?: string };
+      if (res.ok && data.jobId) {
+        router.push(`/app/jobs/${data.jobId}`);
+        return;
+      }
+      router.refresh();
+    } finally {
+      setBusy(false);
+    }
   }
 
   const canCancel = ["QUEUED", "VALIDATING", "PROCESSING"].includes(status);

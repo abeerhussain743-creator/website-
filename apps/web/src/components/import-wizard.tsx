@@ -31,6 +31,38 @@ type AnalyzeResponse = {
 
 const STEPS = ["Upload", "Map", "Validate", "Preview", "Run"] as const;
 
+const FIELD_OPTIONS = [
+  "",
+  "product.handle",
+  "product.title",
+  "product.bodyHtml",
+  "product.vendor",
+  "product.productType",
+  "product.tags",
+  "product.status",
+  "variant.sku",
+  "variant.price",
+  "variant.compareAtPrice",
+  "variant.barcode",
+  "variant.inventoryQuantity",
+  "variant.weight",
+  "product.seoTitle",
+  "product.seoDescription",
+];
+
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = String(reader.result ?? "");
+      const base64 = result.includes(",") ? result.split(",")[1]! : result;
+      resolve(base64);
+    };
+    reader.onerror = () => reject(reader.error ?? new Error("Read failed"));
+    reader.readAsDataURL(file);
+  });
+}
+
 export function ImportWizard({ stores }: { stores: StoreOption[] }) {
   const router = useRouter();
   const [step, setStep] = useState(0);
@@ -52,11 +84,21 @@ export function ImportWizard({ stores }: { stores: StoreOption[] }) {
     setBusy(true);
     setError(null);
     try {
-      const text = await file.text();
+      const isExcel = /\.xlsx?$/i.test(file.name);
+      const body = isExcel
+        ? {
+            fileBase64: await fileToBase64(file),
+            filename: file.name,
+          }
+        : {
+            csvContent: await file.text(),
+            filename: file.name,
+          };
+
       const res = await fetch("/api/imports/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ csvContent: text, filename: file.name }),
+        body: JSON.stringify(body),
       });
       const data = (await res.json()) as AnalyzeResponse & { error?: string };
       if (!res.ok) throw new Error(data.error ?? "Analyze failed");
@@ -83,7 +125,7 @@ export function ImportWizard({ stores }: { stores: StoreOption[] }) {
           storeId,
           csvContent: analysis.csvContent,
           mappings,
-          filename: fileName,
+          filename: fileName.replace(/\.xlsx?$/i, ".csv"),
         }),
       });
       const data = (await res.json()) as { jobId?: string; error?: string };
@@ -140,13 +182,15 @@ export function ImportWizard({ stores }: { stores: StoreOption[] }) {
             </select>
           </label>
           <label className="flex cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-ink-300 bg-sand-50 px-4 py-12 text-center">
-            <span className="font-medium">Drop a CSV file or click to browse</span>
+            <span className="font-medium">
+              Drop a CSV or Excel file, or click to browse
+            </span>
             <span className="mt-1 text-sm text-ink-500">
-              MVP supports CSV product imports (XLSX streaming next)
+              Supports .csv and .xlsx product sheets
             </span>
             <input
               type="file"
-              accept=".csv,text/csv"
+              accept=".csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
               className="hidden"
               disabled={busy || !storeId}
               onChange={(e) => {
@@ -170,7 +214,7 @@ export function ImportWizard({ stores }: { stores: StoreOption[] }) {
                 <table className="min-w-full text-sm">
                   <thead>
                     <tr className="border-b text-left text-ink-500">
-                      <th className="py-2 pr-4">CSV column</th>
+                      <th className="py-2 pr-4">Spreadsheet column</th>
                       <th className="py-2">Shopify field</th>
                     </tr>
                   </thead>
@@ -179,10 +223,9 @@ export function ImportWizard({ stores }: { stores: StoreOption[] }) {
                       <tr key={m.sourceColumn} className="border-b border-ink-100">
                         <td className="py-2 pr-4 font-medium">{m.sourceColumn}</td>
                         <td className="py-2">
-                          <input
+                          <select
                             className="w-full rounded border border-ink-300 px-2 py-1"
                             value={m.targetField ?? ""}
-                            placeholder="unmapped"
                             onChange={(e) => {
                               const next = [...mappings];
                               next[idx] = {
@@ -191,7 +234,13 @@ export function ImportWizard({ stores }: { stores: StoreOption[] }) {
                               };
                               setMappings(next);
                             }}
-                          />
+                          >
+                            {FIELD_OPTIONS.map((opt) => (
+                              <option key={opt || "none"} value={opt}>
+                                {opt || "unmapped"}
+                              </option>
+                            ))}
+                          </select>
                         </td>
                       </tr>
                     ))}
@@ -262,6 +311,10 @@ export function ImportWizard({ stores }: { stores: StoreOption[] }) {
                   </div>
                 ))}
               </div>
+              <p className="text-sm text-ink-500">
+                Duplicate handles in the file are counted as updates. Shopify
+                creates vs updates are finalized during the job.
+              </p>
               <button
                 type="button"
                 className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white"

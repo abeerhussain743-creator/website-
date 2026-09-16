@@ -8,7 +8,7 @@ type StoreOption = { id: string; label: string };
 export function ExportForm({ stores }: { stores: StoreOption[] }) {
   const router = useRouter();
   const [storeId, setStoreId] = useState(stores[0]?.id ?? "");
-  const [format, setFormat] = useState<"CSV" | "JSON">("CSV");
+  const [format, setFormat] = useState<"CSV" | "XLSX">("CSV");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -57,15 +57,15 @@ export function ExportForm({ stores }: { stores: StoreOption[] }) {
         <select
           className="mt-1 w-full rounded-lg border border-ink-300 bg-white px-3 py-2"
           value={format}
-          onChange={(e) => setFormat(e.target.value as "CSV" | "JSON")}
+          onChange={(e) => setFormat(e.target.value as "CSV" | "XLSX")}
         >
           <option value="CSV">CSV</option>
-          <option value="JSON">JSON</option>
+          <option value="XLSX">Excel (.xlsx)</option>
         </select>
       </label>
       <p className="text-sm text-ink-500">
-        Export runs asynchronously via Shopify Bulk Operations
-        (`bulkOperationRunQuery`).
+        Export runs asynchronously via Shopify Bulk Operations, then converts to
+        your chosen spreadsheet format.
       </p>
       <button
         type="button"
