@@ -52,7 +52,8 @@ npm run dev
 
 In a second terminal: `npm run dev:worker`
 
-DB scripts load the **repo-root** `.env` automatically (no need to copy into `packages\db`).
+DB scripts, the Next.js web app, and the worker all load the **repo-root** `.env`
+automatically (no need to copy into `packages\\db` or `apps\\web`).
 Docker Desktop must be installed and running for Postgres/Redis/MinIO.
 
 ## MVP scope
