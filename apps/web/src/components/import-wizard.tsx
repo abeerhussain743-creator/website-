@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
 type StoreOption = { id: string; label: string };
@@ -27,6 +27,12 @@ type AnalyzeResponse = {
     warnings: number;
   };
   csvContent: string;
+};
+
+type SavedMapping = {
+  id: string;
+  name: string;
+  mappings: Array<{ sourceColumn: string; targetField: string | null }>;
 };
 
 const STEPS = ["Upload", "Map", "Validate", "Preview", "Run"] as const;
@@ -63,6 +69,19 @@ function fileToBase64(file: File): Promise<string> {
   });
 }
 
+function applySavedMapping(
+  columns: string[],
+  saved: Array<{ sourceColumn: string; targetField: string | null }>,
+): Array<{ sourceColumn: string; targetField: string | null }> {
+  const bySource = new Map(
+    saved.map((m) => [m.sourceColumn.toLowerCase(), m.targetField]),
+  );
+  return columns.map((sourceColumn) => ({
+    sourceColumn,
+    targetField: bySource.get(sourceColumn.toLowerCase()) ?? null,
+  }));
+}
+
 export function ImportWizard({ stores }: { stores: StoreOption[] }) {
   const router = useRouter();
   const [step, setStep] = useState(0);
@@ -72,17 +91,45 @@ export function ImportWizard({ stores }: { stores: StoreOption[] }) {
   const [mappings, setMappings] = useState<
     Array<{ sourceColumn: string; targetField: string | null }>
   >([]);
+  const [savedList, setSavedList] = useState<SavedMapping[]>([]);
+  const [selectedSavedId, setSelectedSavedId] = useState("");
+  const [mappingName, setMappingName] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
 
   const errorCount = useMemo(
     () => analysis?.issues.filter((i) => i.severity === "error").length ?? 0,
     [analysis],
   );
 
+  useEffect(() => {
+    if (!storeId) {
+      setSavedList([]);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch(
+          `/api/field-mappings?storeId=${encodeURIComponent(storeId)}&dataset=PRODUCTS`,
+        );
+        if (!res.ok) return;
+        const data = (await res.json()) as { mappings?: SavedMapping[] };
+        if (!cancelled) setSavedList(data.mappings ?? []);
+      } catch {
+        /* ignore — templates are optional */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [storeId]);
+
   async function onFile(file: File) {
     setBusy(true);
     setError(null);
+    setSaveMessage(null);
     try {
       const isExcel = /\.xlsx?$/i.test(file.name);
       const body = isExcel
@@ -105,9 +152,66 @@ export function ImportWizard({ stores }: { stores: StoreOption[] }) {
       setFileName(file.name);
       setAnalysis(data);
       setMappings(data.mappings);
+      setSelectedSavedId("");
+      setMappingName("");
       setStep(1);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function loadSavedMapping(id: string) {
+    setSelectedSavedId(id);
+    setSaveMessage(null);
+    if (!id || !analysis) return;
+    const saved = savedList.find((m) => m.id === id);
+    if (!saved) return;
+    setMappings(applySavedMapping(analysis.columns, saved.mappings));
+    setMappingName(saved.name);
+  }
+
+  async function saveMapping() {
+    if (!storeId || !mappings.length) return;
+    const name = mappingName.trim();
+    if (!name) {
+      setError("Enter a name before saving the mapping");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    setSaveMessage(null);
+    try {
+      const res = await fetch("/api/field-mappings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          storeId,
+          name,
+          dataset: analysis?.dataset ?? "PRODUCTS",
+          mappings,
+          columns: analysis?.columns,
+        }),
+      });
+      const data = (await res.json()) as {
+        id?: string;
+        name?: string;
+        error?: string;
+      };
+      if (!res.ok || !data.id) throw new Error(data.error ?? "Save failed");
+      setSaveMessage(`Saved “${data.name}”`);
+      setSavedList((prev) => [
+        {
+          id: data.id!,
+          name: data.name ?? name,
+          mappings,
+        },
+        ...prev.filter((m) => m.id !== data.id),
+      ]);
+      setSelectedSavedId(data.id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save mapping");
     } finally {
       setBusy(false);
     }
@@ -210,6 +314,25 @@ export function ImportWizard({ stores }: { stores: StoreOption[] }) {
                 Detected <strong>{analysis.dataset}</strong> ·{" "}
                 {analysis.rowCount} rows · {fileName}
               </p>
+
+              {savedList.length > 0 && (
+                <label className="block text-sm font-medium">
+                  Load saved mapping
+                  <select
+                    className="mt-1 w-full rounded-lg border border-ink-300 bg-white px-3 py-2"
+                    value={selectedSavedId}
+                    onChange={(e) => loadSavedMapping(e.target.value)}
+                  >
+                    <option value="">Auto-detected mapping</option>
+                    {savedList.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+
               <div className="overflow-x-auto">
                 <table className="min-w-full text-sm">
                   <thead>
@@ -247,6 +370,30 @@ export function ImportWizard({ stores }: { stores: StoreOption[] }) {
                   </tbody>
                 </table>
               </div>
+
+              <div className="flex flex-wrap items-end gap-2 rounded-xl bg-sand-50 p-3">
+                <label className="min-w-[12rem] flex-1 text-sm font-medium">
+                  Save mapping as
+                  <input
+                    className="mt-1 w-full rounded-lg border border-ink-300 bg-white px-3 py-2"
+                    placeholder="e.g. Supplier catalog v2"
+                    value={mappingName}
+                    onChange={(e) => setMappingName(e.target.value)}
+                  />
+                </label>
+                <button
+                  type="button"
+                  disabled={busy}
+                  className="rounded-lg border border-ink-300 bg-white px-4 py-2 text-sm font-semibold text-ink-800 disabled:opacity-50"
+                  onClick={() => void saveMapping()}
+                >
+                  Save mapping
+                </button>
+              </div>
+              {saveMessage && (
+                <p className="text-sm text-accent">{saveMessage}</p>
+              )}
+
               <button
                 type="button"
                 className="rounded-lg bg-ink-900 px-4 py-2 text-sm font-semibold text-white"
