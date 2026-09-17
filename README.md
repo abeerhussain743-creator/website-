@@ -37,6 +37,25 @@ npm run dev:worker
 
 Web: http://localhost:3000
 
+### Windows (Command Prompt)
+
+```bat
+copy .env.example .env
+docker compose up -d
+npm install
+npm run db:generate
+npm run db:push
+npm run db:seed
+npm run db:seed:demo
+npm run dev
+```
+
+In a second terminal: `npm run dev:worker`
+
+DB scripts, the Next.js web app, and the worker all load the **repo-root** `.env`
+automatically (no need to copy into `packages\\db` or `apps\\web`).
+Docker Desktop must be installed and running for Postgres/Redis/MinIO.
+
 ## MVP scope
 
 - Shopify OAuth + store connection (demo seed supported)
@@ -44,6 +63,7 @@ Web: http://localhost:3000
 - Product import (CSV / XLSX) with field mapping, validation, preview
 - Product export (CSV / XLSX) via Bulk Operations
 - Product bulk update (price / compare-at / inventory / status / tags)
+- Saved import field mappings + column templates
 - Background jobs, progress, error reports, retry failed rows
 - Local disk or S3/MinIO artifact storage
 - Dry-run mode for demo tokens / `SHOPDATA_DRY_RUN=true`

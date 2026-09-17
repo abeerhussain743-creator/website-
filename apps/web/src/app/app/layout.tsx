@@ -6,6 +6,7 @@ const nav = [
   { href: "/app/imports", label: "Import" },
   { href: "/app/exports", label: "Export" },
   { href: "/app/bulk-update", label: "Bulk update" },
+  { href: "/app/templates", label: "Templates" },
   { href: "/app/jobs", label: "Jobs" },
   { href: "/app/settings", label: "Settings" },
 ];

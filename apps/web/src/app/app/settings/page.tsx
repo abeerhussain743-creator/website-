@@ -40,9 +40,17 @@ export default function SettingsPage() {
         </ul>
       </section>
 
+      <section className="rounded-2xl border border-ink-100 bg-white/80 p-5 shadow-soft">
+        <h2 className="text-lg font-semibold">Phase 2 (started)</h2>
+        <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-ink-500">
+          <li>Save / load import field mappings from the Import wizard</li>
+          <li>Manage mappings and column templates under Templates</li>
+        </ul>
+      </section>
+
       <section className="rounded-2xl border border-ink-100 bg-white/80 p-5 text-sm text-ink-500 shadow-soft">
-        Billing, teams/RBAC, scheduling, and multi-resource datasets are planned
-        for later phases — see <code>docs/ARCHITECTURE.md</code>.
+        Billing, teams/RBAC, scheduling, and multi-resource datasets are still
+        planned — see <code>docs/ARCHITECTURE.md</code>.
       </section>
     </div>
   );
