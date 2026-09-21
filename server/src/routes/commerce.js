@@ -16,7 +16,9 @@ import {
   Attachment,
   AuditLog,
 } from '../models/index.js';
+import multer from 'multer';
 import { requireAuth } from '../middleware/auth.js';
+import { requireMinRole } from '../middleware/rbac.js';
 import {
   processShopifyOrder,
   processRefund,
@@ -24,7 +26,10 @@ import {
   processExpense,
   adjustInventory,
 } from '../services/shopifyAutomation.js';
+import { importBankCsv } from '../services/bankImportService.js';
+import { closeFiscalYear } from '../services/fiscalCloseService.js';
 
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 2 * 1024 * 1024 } });
 const router = Router();
 router.use(requireAuth);
 
@@ -174,6 +179,34 @@ router.patch('/bank-transactions/:id/match', async (req, res) => {
   );
   if (!tx) return res.status(404).json({ error: 'Not found' });
   res.json({ transaction: tx });
+});
+
+router.post(
+  '/bank-accounts/:id/import-csv',
+  requireMinRole('accountant'),
+  upload.single('file'),
+  async (req, res) => {
+    try {
+      const account = await BankAccount.findOne({ _id: req.params.id, companyId: req.companyId });
+      if (!account) return res.status(404).json({ error: 'Bank account not found' });
+      if (!req.file) return res.status(400).json({ error: 'CSV file is required' });
+      const text = req.file.buffer.toString('utf8');
+      const result = await importBankCsv(req.companyId, account._id, text, req.user._id);
+      res.status(201).json(result);
+    } catch (err) {
+      res.status(400).json({ error: err.message });
+    }
+  }
+);
+
+router.post('/fiscal-close', requireMinRole('admin'), async (req, res) => {
+  try {
+    const year = Number(req.body.year) || new Date().getFullYear();
+    const result = await closeFiscalYear(req.companyId, { year, userId: req.user._id });
+    res.status(201).json(result);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
 });
 
 // Tax / attachments / audit

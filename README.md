@@ -1,38 +1,21 @@
-# Meridian — Shopify Bookkeeping
+# Meridian — Production Shopify Bookkeeping
 
-Double-entry bookkeeping for Shopify stores: orders, fees, inventory, payouts, and financial statements on a scalable chart of accounts.
+Double-entry bookkeeping for Shopify stores with live OAuth/webhooks, bank CSV import, fiscal close, Excel/PDF exports, RBAC, and Docker deployment.
 
 ## Stack
 
-- **MongoDB** (in-memory fallback for local demos)
-- **Express / Node.js**
-- **React (Vite)** + Recharts + Framer Motion
+- **MongoDB** (required in production; in-memory fallback for local demos)
+- **Express / Node.js** with Helmet, rate limits, validation
+- **React (Vite)** dashboard
+- **Shopify Admin API** OAuth + HMAC webhooks
 
-## Data model
-
-Implements the Shopify bookkeeping schema:
-
-Companies · Chart of Accounts · Journal Entries / Lines · Customers · Vendors · Products · Orders · Payments · Refunds · Payouts · Expenses · Inventory · Inventory Transactions · Bank Accounts / Transactions · Sales Tax · Attachments · Audit Log
-
-### Shopify automation flow
-
-1. Order → invoice in **Shopify Clearing**
-2. Credit **Sales**, **Shipping**, **Sales Tax Payable**
-3. Debit **COGS** / credit **Inventory**
-4. Debit **Processing Fees** / credit **Shopify Clearing**
-5. Payout → debit **Bank** / credit **Shopify Clearing**
-
-Seed data includes the worked example: $150 sale + $10 shipping + $12 tax, $5 fee, $70 COGS, $167 payout.
-
-## Quick start
+## Quick start (development)
 
 ```bash
 npm install
 npm install --prefix server
 npm install --prefix client
-
 cp server/.env.example server/.env
-
 npm run dev
 ```
 
@@ -45,24 +28,75 @@ npm run dev
 |-------|----------|
 | `demo@meridian.books` | `demo1234` |
 
-## Dashboard modules
+(Exact seeded credentials are printed in the API console on boot.)
 
-Financial Dashboard · Profit & Loss · Balance Sheet · Cash Flow · General Ledger · Trial Balance · Shopify Sales · Inventory · Bank Reconciliation · Payout Reconciliation · Expenses · Customers · Vendors · Tax Reports · Fiscal Year Closing · CSV Export · Shopify Sync · Audit Log
-
-## Production
+## Production (Docker)
 
 ```bash
-npm run build
-npm start
+export JWT_SECRET="$(openssl rand -hex 32)"
+docker compose up --build -d
 ```
 
-Serves the API and built client from the Express server when `client/dist` exists.
+App/API: http://localhost:5000
+
+Set Shopify credentials in the environment or a `.env` file next to `docker-compose.yml`:
+
+```bash
+SHOPIFY_API_KEY=...
+SHOPIFY_API_SECRET=...
+CLIENT_URL=https://books.example.com
+PUBLIC_API_URL=https://books.example.com
+```
+
+Shopify app callback URL:
+
+```
+https://books.example.com/api/shopify/callback
+```
+
+Webhook (orders/create):
+
+```
+https://books.example.com/api/shopify/webhooks/orders-create
+```
+
+## Production without Docker
+
+```bash
+npm install --prefix server
+npm install --prefix client
+npm run build --prefix client
+cp server/.env.example server/.env   # fill MONGODB_URI + JWT_SECRET
+NODE_ENV=production npm start --prefix server
+```
 
 ## Environment
 
 | Variable | Purpose |
 |----------|---------|
-| `MONGODB_URI` | Persistent MongoDB (empty → in-memory) |
-| `JWT_SECRET` | JWT signing secret |
-| `CLIENT_URL` | CORS origin |
-| `SEED_ON_START` | Seed demo data on boot (default true in memory mode) |
+| `MONGODB_URI` | Persistent MongoDB (**required in production**) |
+| `JWT_SECRET` | JWT signing secret (**required, 32+ chars in production**) |
+| `CLIENT_URL` | CORS / OAuth redirect origin |
+| `PUBLIC_API_URL` | Public API base for Shopify callbacks |
+| `SEED_ON_START` | Seed demo data (`true`/`false`) |
+| `TRUST_PROXY` | Set `true` behind reverse proxies |
+| `SHOPIFY_API_KEY` / `SHOPIFY_API_SECRET` | Shopify app credentials |
+
+## Security & ops
+
+- Helmet security headers + rate limiting
+- Password policy on registration
+- Role-based access: owner · admin · accountant · viewer
+- Tenant isolation on every JWT
+- Shopify OAuth HMAC + webhook HMAC verification
+- Graceful shutdown + `/api/health` and `/api/ready`
+
+## Modules
+
+Financial Dashboard · P&L · Balance Sheet · Cash Flow · General Ledger · Trial Balance · Shopify Sales · Inventory · Bank Reconciliation (CSV import) · Payout Reconciliation · Expenses · Customers · Vendors · Tax Reports · Fiscal Year Closing · Settings (Shopify + exports) · Audit Log · Excel/PDF export
+
+## Tests
+
+```bash
+npm test --prefix server
+```

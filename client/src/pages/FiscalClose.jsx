@@ -1,18 +1,40 @@
 import { useEffect, useState } from 'react';
-import { reportsApi } from '../api/client';
+import { reportsApi, commerceApi } from '../api/client';
 import { money } from '../utils/format';
 
 export default function FiscalClose() {
   const [pnl, setPnl] = useState(null);
   const [sheet, setSheet] = useState(null);
   const [closed, setClosed] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const year = new Date().getFullYear();
 
   useEffect(() => {
-    Promise.all([reportsApi.profitLoss(), reportsApi.balanceSheet()]).then(([p, s]) => {
+    Promise.all([reportsApi.profitLoss(), reportsApi.balanceSheet()])
+      .then(([p, s]) => {
+        setPnl(p);
+        setSheet(s);
+      })
+      .catch((err) => setError(err.message));
+  }, []);
+
+  async function runClose() {
+    if (!window.confirm(`Post closing entries for FY ${year}? This cannot be undone easily.`)) return;
+    setBusy(true);
+    setError('');
+    try {
+      await commerceApi.fiscalClose(year);
+      setClosed(true);
+      const [p, s] = await Promise.all([reportsApi.profitLoss(), reportsApi.balanceSheet()]);
       setPnl(p);
       setSheet(s);
-    });
-  }, []);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
 
   if (!pnl || !sheet) return <div className="page">Preparing fiscal close checklist…</div>;
 
@@ -28,12 +50,13 @@ export default function FiscalClose() {
       <div className="page-title">
         <div>
           <h1>Fiscal Year Closing</h1>
-          <p>Checklist to close the books and roll net income into retained earnings.</p>
+          <p>Close FY {year} books and roll net income into retained earnings.</p>
         </div>
-        <button className="btn sea" type="button" onClick={() => setClosed(true)} disabled={closed}>
-          {closed ? 'Close marked complete' : 'Mark year closed (demo)'}
+        <button className="btn sea" type="button" onClick={runClose} disabled={closed || busy || !sheet.balanced}>
+          {closed ? 'Year closed' : busy ? 'Posting…' : `Close FY ${year}`}
         </button>
       </div>
+      {error && <p style={{ color: 'var(--coral, #c45c4a)' }}>{error}</p>}
       <div className="kpi-grid">
         <div className="kpi">
           <div className="label">Net income to close</div>
@@ -57,8 +80,8 @@ export default function FiscalClose() {
         </ul>
         {closed && (
           <p className="muted" style={{ marginBottom: 0 }}>
-            Demo mode records the close intent. In production this posts: Debit Income Summary / Credit
-            Retained Earnings for {money(pnl.netIncome)}.
+            Closing journal posted: revenue and expense accounts zeroed into Retained Earnings for{' '}
+            {money(pnl.netIncome)}.
           </p>
         )}
       </section>

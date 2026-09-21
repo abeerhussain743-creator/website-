@@ -16,6 +16,7 @@ import {
   Percent,
   CalendarCheck2,
   ScrollText,
+  Settings,
   LogOut,
   Library,
 } from 'lucide-react';
@@ -39,6 +40,7 @@ const nav = [
   { to: '/app/vendors', label: 'Vendors', icon: Building2 },
   { to: '/app/tax', label: 'Tax Reports', icon: Percent },
   { to: '/app/fiscal-close', label: 'Fiscal Year Closing', icon: CalendarCheck2 },
+  { to: '/app/settings', label: 'Settings', icon: Settings },
   { to: '/app/audit', label: 'Audit Log', icon: ScrollText },
 ];
 

@@ -10,7 +10,7 @@ const journalEntrySchema = new mongoose.Schema(
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     sourceType: {
       type: String,
-      enum: ['manual', 'order', 'refund', 'payout', 'expense', 'inventory', 'fee', 'adjustment'],
+      enum: ['manual', 'order', 'refund', 'payout', 'expense', 'inventory', 'fee', 'adjustment', 'closing'],
       default: 'manual',
     },
     sourceId: { type: mongoose.Schema.Types.ObjectId, default: null },

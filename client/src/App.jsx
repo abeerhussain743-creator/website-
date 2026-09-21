@@ -20,6 +20,7 @@ import Vendors from './pages/Vendors';
 import TaxReports from './pages/TaxReports';
 import AuditLog from './pages/AuditLog';
 import FiscalClose from './pages/FiscalClose';
+import Settings from './pages/Settings';
 
 function Protected({ children }) {
   const { user, loading } = useAuth();
@@ -57,6 +58,7 @@ export default function App() {
         <Route path="vendors" element={<Vendors />} />
         <Route path="tax" element={<TaxReports />} />
         <Route path="fiscal-close" element={<FiscalClose />} />
+        <Route path="settings" element={<Settings />} />
         <Route path="audit" element={<AuditLog />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

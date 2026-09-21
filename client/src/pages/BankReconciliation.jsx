@@ -5,11 +5,14 @@ import { money, shortDate } from '../utils/format';
 export default function BankReconciliation() {
   const [accounts, setAccounts] = useState([]);
   const [transactions, setTransactions] = useState([]);
+  const [selectedAccount, setSelectedAccount] = useState('');
+  const [message, setMessage] = useState('');
 
   async function load() {
     const [a, t] = await Promise.all([commerceApi.bankAccounts(), commerceApi.bankTransactions()]);
     setAccounts(a.accounts);
     setTransactions(t.transactions);
+    if (!selectedAccount && a.accounts[0]) setSelectedAccount(a.accounts[0]._id);
   }
 
   useEffect(() => {
@@ -19,6 +22,21 @@ export default function BankReconciliation() {
   async function match(id) {
     await commerceApi.matchBank(id, {});
     await load();
+  }
+
+  async function onCsv(e) {
+    const file = e.target.files?.[0];
+    if (!file || !selectedAccount) return;
+    setMessage('');
+    try {
+      const result = await commerceApi.importBankCsv(selectedAccount, file);
+      setMessage(`Imported ${result.imported} transactions`);
+      await load();
+    } catch (err) {
+      setMessage(err.message);
+    } finally {
+      e.target.value = '';
+    }
   }
 
   const unmatched = transactions.filter((t) => !t.matched).length;
@@ -32,9 +50,23 @@ export default function BankReconciliation() {
         </div>
         <span className={unmatched ? 'badge warn' : 'badge'}>{unmatched} unmatched</span>
       </div>
+      {message && <p className="muted">{message}</p>}
       <section className="panel">
         <div className="panel-head">
           <h2>Bank accounts</h2>
+          <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+            <select value={selectedAccount} onChange={(e) => setSelectedAccount(e.target.value)}>
+              {accounts.map((a) => (
+                <option key={a._id} value={a._id}>
+                  {a.bankName} {a.accountNumber}
+                </option>
+              ))}
+            </select>
+            <label className="btn secondary" style={{ cursor: 'pointer' }}>
+              Import CSV
+              <input type="file" accept=".csv,text/csv" hidden onChange={onCsv} />
+            </label>
+          </div>
         </div>
         <div className="table-wrap">
           <table className="data">

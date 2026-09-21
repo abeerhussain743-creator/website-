@@ -1,15 +1,18 @@
 import mongoose from 'mongoose';
 import { MongoMemoryServer } from 'mongodb-memory-server';
+import { env } from './env.js';
 
 let memoryServer;
 
 export async function connectDB() {
-  const uri = process.env.MONGODB_URI;
-
-  if (uri) {
-    await mongoose.connect(uri);
+  if (env.mongodbUri) {
+    await mongoose.connect(env.mongodbUri);
     console.log('MongoDB connected');
     return { mode: 'persistent' };
+  }
+
+  if (env.isProd) {
+    throw new Error('MONGODB_URI is required in production');
   }
 
   memoryServer = await MongoMemoryServer.create();
@@ -20,7 +23,5 @@ export async function connectDB() {
 
 export async function disconnectDB() {
   await mongoose.disconnect();
-  if (memoryServer) {
-    await memoryServer.stop();
-  }
+  if (memoryServer) await memoryServer.stop();
 }
