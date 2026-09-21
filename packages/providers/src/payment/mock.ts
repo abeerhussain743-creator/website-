@@ -3,7 +3,7 @@ import type {
   PaymentCallback,
   PaymentLinkResult,
   PaymentProvider,
-} from "./types";
+} from "./types.js";
 
 export class MockPaymentProvider implements PaymentProvider {
   readonly name = "mock";

@@ -3,7 +3,7 @@ import type {
   OutboundMediaMessage,
   OutboundTextMessage,
   SendResult,
-} from "./types";
+} from "./types.js";
 
 export type MockMessage = OutboundTextMessage | OutboundMediaMessage;
 

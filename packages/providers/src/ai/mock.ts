@@ -1,4 +1,4 @@
-import type { AICompletionRequest, AICompletionResult, AIProvider } from "./types";
+import type { AICompletionRequest, AICompletionResult, AIProvider } from "./types.js";
 
 export class MockAIProvider implements AIProvider {
   readonly name = "mock";

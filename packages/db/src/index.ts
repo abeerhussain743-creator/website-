@@ -17,4 +17,4 @@ if (process.env.NODE_ENV !== "production") {
 
 export type { Prisma };
 export * from "@prisma/client";
-export { createTenantClient, TenantScopeError } from "./tenant-client";
+export { createTenantClient, TenantScopeError } from "./tenant-client.js";

@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PrismaClient } from "@prisma/client";
-import { createTenantClient, TenantScopeError } from "../src/tenant-client";
+import { createTenantClient, TenantScopeError } from "../src/tenant-client.js";
 
 const prisma = new PrismaClient();
 

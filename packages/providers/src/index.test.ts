@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createProviders, MockPaymentProvider } from "./index";
+import { createProviders, MockPaymentProvider } from "./index.js";
 
 describe("providers", () => {
   it("runs fully on mocks with zero external accounts", async () => {

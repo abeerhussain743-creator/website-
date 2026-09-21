@@ -1,13 +1,13 @@
-import { MockAIProvider } from "./ai/mock";
-import type { AIProvider } from "./ai/types";
-import { MockMessagingProvider } from "./messaging/mock";
-import type { MessagingProvider } from "./messaging/types";
-import { MockPaymentProvider } from "./payment/mock";
-import type { PaymentProvider } from "./payment/types";
-import { MockTTSProvider } from "./tts/mock";
-import type { TTSProvider } from "./tts/types";
-import { MockVoiceCallProvider } from "./voice/mock";
-import type { VoiceCallProvider } from "./voice/types";
+import { MockAIProvider } from "./ai/mock.js";
+import type { AIProvider } from "./ai/types.js";
+import { MockMessagingProvider } from "./messaging/mock.js";
+import type { MessagingProvider } from "./messaging/types.js";
+import { MockPaymentProvider } from "./payment/mock.js";
+import type { PaymentProvider } from "./payment/types.js";
+import { MockTTSProvider } from "./tts/mock.js";
+import type { TTSProvider } from "./tts/types.js";
+import { MockVoiceCallProvider } from "./voice/mock.js";
+import type { VoiceCallProvider } from "./voice/types.js";
 
 export type ProviderBundle = {
   messaging: MessagingProvider;

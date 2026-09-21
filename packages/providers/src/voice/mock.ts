@@ -2,7 +2,7 @@ import type {
   VoiceCallProvider,
   VoiceCallRequest,
   VoiceCallResult,
-} from "./types";
+} from "./types.js";
 
 export class MockVoiceCallProvider implements VoiceCallProvider {
   readonly name = "mock";

@@ -1,4 +1,4 @@
-import { addPaisa, paisa, percentOfPaisa, type Paisa } from "../money";
+import { addPaisa, paisa, percentOfPaisa, type Paisa } from "../money.js";
 
 export type DiscountKind = "PERCENT" | "FIXED";
 
@@ -71,4 +71,4 @@ export function sumPaisa(values: number[]): Paisa {
   return values.reduce<Paisa>((acc, v) => addPaisa(acc, v), paisa(0));
 }
 
-export * from "./installments";
+export * from "./installments.js";

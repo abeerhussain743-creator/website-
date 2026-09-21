@@ -1,4 +1,4 @@
-import { paisa, type Paisa } from "../money";
+import { paisa, type Paisa } from "../money.js";
 
 export type Installment = {
   sequence: number;

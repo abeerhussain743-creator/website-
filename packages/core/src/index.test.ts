@@ -1,17 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { formatPkr, pkrToPaisa, paisa } from "./money";
-import { normalizePakistanPhone } from "./phone";
-import { terminologyForType, t } from "./terminology";
-import { hasFeature, resolveEntitlements, withinLimit } from "./entitlements";
-import { hasPermission, DEFAULT_PERMISSIONS } from "./permissions";
+import { formatPkr, pkrToPaisa, paisa } from "./money.js";
+import { normalizePakistanPhone } from "./phone.js";
+import { terminologyForType, t } from "./terminology.js";
+import { hasFeature, resolveEntitlements, withinLimit } from "./entitlements.js";
+import { hasPermission, DEFAULT_PERMISSIONS } from "./permissions.js";
 import {
   allocatePayment,
   applyDiscount,
   applySiblingDiscount,
   calculateLateFee,
   buildEqualInstallments,
-} from "./fees/index";
-import { formatDate, isWithinQuietHours } from "./dates";
+} from "./fees/index.js";
+import { formatDate, isWithinQuietHours } from "./dates.js";
 
 describe("money", () => {
   it("formats Pakistani grouping", () => {

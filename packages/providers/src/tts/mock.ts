@@ -1,4 +1,4 @@
-import type { TTSProvider, TTSRequest, TTSResult } from "./types";
+import type { TTSProvider, TTSRequest, TTSResult } from "./types.js";
 
 export class MockTTSProvider implements TTSProvider {
   readonly name = "mock";
