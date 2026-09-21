@@ -1,5 +1,5 @@
 {
-  "name": "@shopdata/worker",
+  "name": "@maxtrone/worker",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -10,15 +10,13 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@shopdata/db": "*",
-    "@shopdata/files": "*",
-    "@shopdata/jobs": "*",
-    "@shopdata/shared": "*",
-    "@shopdata/shopify": "*",
+    "@maxtrone/core": "workspace:*",
+    "@maxtrone/db": "workspace:*",
+    "@maxtrone/providers": "workspace:*",
     "bullmq": "^5.41.0",
     "dotenv": "^16.4.7",
     "ioredis": "^5.5.0",
-    "@shopdata/storage": "*"
+    "pino": "^9.6.0"
   },
   "devDependencies": {
     "@types/node": "^22.13.10",

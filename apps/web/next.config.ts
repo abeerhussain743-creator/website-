@@ -2,16 +2,13 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   transpilePackages: [
-    "@shopdata/db",
-    "@shopdata/shared",
-    "@shopdata/shopify",
-    "@shopdata/files",
-    "@shopdata/jobs",
+    "@maxtrone/ui",
+    "@maxtrone/core",
+    "@maxtrone/db",
+    "@maxtrone/providers",
   ],
   experimental: {
-    serverActions: {
-      bodySizeLimit: "32mb",
-    },
+    optimizePackageImports: ["lucide-react", "@maxtrone/ui"],
   },
 };
 

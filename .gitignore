@@ -1,4 +1,4 @@
-# ShopData monorepo
+# Maxtrone Campus monorepo
 node_modules/
 dist/
 .next/
@@ -15,3 +15,6 @@ packages/db/prisma/*.db
 packages/db/prisma/*.db-journal
 .data/
 dump.rdb
+playwright-report/
+test-results/
+*.tsbuildinfo

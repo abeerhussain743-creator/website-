@@ -1,5 +1,5 @@
 {
-  "name": "@shopdata/db",
+  "name": "@maxtrone/db",
   "version": "0.1.0",
   "private": true,
   "main": "./src/index.ts",
@@ -9,19 +9,28 @@
   },
   "scripts": {
     "generate": "prisma generate",
-    "migrate": "prisma migrate dev",
-    "push": "prisma db push",
-    "seed": "tsx prisma/seed.ts",
-    "seed:demo": "tsx prisma/seed-demo.ts",
+    "migrate": "dotenv -e ../../.env -- prisma migrate dev",
+    "push": "dotenv -e ../../.env -- prisma db push",
+    "seed": "dotenv -e ../../.env -- tsx prisma/seed.ts",
     "build": "prisma generate && tsc -p tsconfig.json",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "dotenv -e ../../.env -- vitest run"
+  },
+  "prisma": {
+    "seed": "dotenv -e ../../.env -- tsx prisma/seed.ts"
   },
   "dependencies": {
-    "@prisma/client": "^6.5.0"
+    "@maxtrone/core": "workspace:*",
+    "@prisma/client": "^6.5.0",
+    "better-auth": "^1.2.5"
   },
   "devDependencies": {
+    "@types/node": "^22.20.4",
+    "dotenv": "^16.6.1",
+    "dotenv-cli": "^8.0.0",
     "prisma": "^6.5.0",
     "tsx": "^4.19.3",
-    "typescript": "^5.8.2"
+    "typescript": "^5.8.2",
+    "vitest": "^3.0.8"
   }
 }

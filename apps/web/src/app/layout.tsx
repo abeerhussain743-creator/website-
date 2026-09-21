@@ -1,20 +1,23 @@
-import type { Metadata } from "next";
+import "@maxtrone/ui/globals.css";
 import "./globals.css";
+import type { Metadata } from "next";
+import { ThemeProvider } from "@/components/theme-provider";
 
 export const metadata: Metadata = {
-  title: "ShopData — Shopify data operations, simplified",
-  description:
-    "Import, export, and bulk-update Shopify data with spreadsheet-friendly workflows.",
+  title: "Maxtrone Campus",
+  description: "WhatsApp-first school SaaS for Pakistan",
 };
 
 export default function RootLayout({
   children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+}: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en">
-      <body>{children}</body>
+    <html lang="en" suppressHydrationWarning>
+      <body className="min-h-screen bg-[var(--background)] text-[var(--foreground)] antialiased">
+        <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
+          {children}
+        </ThemeProvider>
+      </body>
     </html>
   );
 }
