@@ -99,17 +99,23 @@ async function main() {
       name: "Ayesha Khan",
       email: "owner@greenfield.edu.pk",
       emailVerified: true,
-      accounts: {
-        create: {
-          accountId: "owner@greenfield.edu.pk",
-          providerId: "credential",
-          password: passwordHash,
-        },
-      },
     },
   });
 
-  await prisma.user.upsert({
+  // Better Auth credential accounts must use accountId === user.id
+  await prisma.account.upsert({
+    where: { id: `cred-${owner.id}` },
+    update: { password: passwordHash, accountId: owner.id },
+    create: {
+      id: `cred-${owner.id}`,
+      accountId: owner.id,
+      providerId: "credential",
+      userId: owner.id,
+      password: passwordHash,
+    },
+  });
+
+  const superAdmin = await prisma.user.upsert({
     where: { email: "superadmin@maxtrone.local" },
     update: { isSuperAdmin: true },
     create: {
@@ -117,13 +123,18 @@ async function main() {
       email: "superadmin@maxtrone.local",
       emailVerified: true,
       isSuperAdmin: true,
-      accounts: {
-        create: {
-          accountId: "superadmin@maxtrone.local",
-          providerId: "credential",
-          password: passwordHash,
-        },
-      },
+    },
+  });
+
+  await prisma.account.upsert({
+    where: { id: `cred-${superAdmin.id}` },
+    update: { password: passwordHash, accountId: superAdmin.id },
+    create: {
+      id: `cred-${superAdmin.id}`,
+      accountId: superAdmin.id,
+      providerId: "credential",
+      userId: superAdmin.id,
+      password: passwordHash,
     },
   });
 
