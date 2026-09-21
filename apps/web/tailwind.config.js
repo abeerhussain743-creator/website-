@@ -1,34 +1,34 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
-  content: ["./src/**/*.{js,ts,jsx,tsx,mdx}"],
+  darkMode: ["class"],
+  content: [
+    "./src/**/*.{ts,tsx}",
+    "../../packages/ui/src/**/*.{ts,tsx}",
+  ],
   theme: {
     extend: {
       colors: {
-        ink: {
-          950: "#0c1222",
-          900: "#121a2f",
-          800: "#1a2540",
-          700: "#243152",
-          500: "#5b6b8c",
-          300: "#a8b3c7",
-          100: "#e8edf5",
-        },
-        accent: {
-          DEFAULT: "#0f766e",
-          soft: "#14b8a6",
-          muted: "#ccfbf1",
-        },
-        sand: {
-          50: "#f7f5f1",
-          100: "#efeae2",
-        },
+        ink: "#0E1B2C",
+        ivory: "#F6F3EC",
+        gold: "#C9A24A",
+        "gold-dark": "#8A6A1F",
+        danger: "#B42318",
+        success: "#127A4B",
       },
       fontFamily: {
-        display: ["var(--font-display)", "Georgia", "serif"],
-        sans: ["var(--font-sans)", "Segoe UI", "sans-serif"],
+        sans: ["DM Sans", "sans-serif"],
+        display: ["Fraunces", "Georgia", "serif"],
+        urdu: ["Noto Nastaliq Urdu", "serif"],
+      },
+      borderRadius: {
+        xl: "14px",
+        "2xl": "16px",
       },
       boxShadow: {
-        soft: "0 18px 50px rgba(12, 18, 34, 0.08)",
+        soft: "0 1px 2px rgba(14, 27, 44, 0.04), 0 8px 24px rgba(14, 27, 44, 0.06)",
+      },
+      transitionDuration: {
+        DEFAULT: "200ms",
       },
     },
   },

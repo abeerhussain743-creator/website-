@@ -1,24 +1,21 @@
 {
-  "name": "shopdata",
+  "name": "maxtrone",
   "private": true,
   "version": "0.1.0",
-  "description": "ShopData \u2014 Shopify data management SaaS",
-  "workspaces": [
-    "apps/*",
-    "packages/*"
-  ],
+  "description": "Maxtrone Campus — WhatsApp-first school SaaS for Pakistan",
+  "packageManager": "pnpm@10.33.3",
   "scripts": {
-    "dev": "npm run dev -w @shopdata/web",
-    "dev:worker": "npm run dev -w @shopdata/worker",
-    "build": "npm run build -w @shopdata/db && npm run build -w @shopdata/shared && npm run build -w @shopdata/shopify && npm run build -w @shopdata/files && npm run build -w @shopdata/storage && npm run build -w @shopdata/jobs && npm run build -w @shopdata/web && npm run build -w @shopdata/worker",
-    "db:generate": "npm run generate -w @shopdata/db",
-    "db:migrate": "npm run migrate -w @shopdata/db",
-    "db:push": "npm run push -w @shopdata/db",
-    "db:seed": "npm run seed -w @shopdata/db",
-    "db:seed:demo": "npm run seed:demo -w @shopdata/db",
-    "lint": "npm run lint -w @shopdata/web",
-    "test": "npm run test --workspaces --if-present",
-    "typecheck": "npm run typecheck --workspaces --if-present"
+    "dev": "pnpm --filter @maxtrone/web dev",
+    "dev:worker": "pnpm --filter @maxtrone/worker dev",
+    "build": "pnpm -r --filter=./packages/* build && pnpm --filter @maxtrone/web build && pnpm --filter @maxtrone/worker build",
+    "db:generate": "pnpm --filter @maxtrone/db generate",
+    "db:migrate": "pnpm --filter @maxtrone/db migrate",
+    "db:push": "pnpm --filter @maxtrone/db push",
+    "db:seed": "pnpm --filter @maxtrone/db seed",
+    "lint": "pnpm --filter @maxtrone/web lint",
+    "test": "pnpm -r --filter=./packages/* test",
+    "typecheck": "pnpm -r typecheck",
+    "ci": "pnpm db:generate && pnpm typecheck && pnpm test"
   },
   "engines": {
     "node": ">=20"
