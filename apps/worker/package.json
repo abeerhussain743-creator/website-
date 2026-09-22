@@ -14,6 +14,7 @@
     "@maxtrone/db": "workspace:*",
     "@maxtrone/providers": "workspace:*",
     "bullmq": "^5.41.0",
+    "date-fns": "^4.4.0",
     "dotenv": "^16.4.7",
     "ioredis": "^5.5.0",
     "pino": "^9.6.0"

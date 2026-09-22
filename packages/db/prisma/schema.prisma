@@ -220,6 +220,32 @@ model Institution {
   webhookEvents        WebhookEvent[]
   jobFailures          JobFailure[]
   tasks                Task[]
+  attendanceSessions   AttendanceSession[]
+  staffAttendance      StaffAttendance[]
+  leadSources          LeadSource[]
+  leadStages           LeadStage[]
+  leads                Lead[]
+  bookingSlots         BookingSlot[]
+  referrals            Referral[]
+  siblingProspects     SiblingProspect[]
+  knowledgeBase        KnowledgeBaseEntry[]
+  aiInteractions       AIInteraction[]
+  sequences            Sequence[]
+  feeHeads             FeeHead[]
+  feeStructures        FeeStructure[]
+  discounts            Discount[]
+  lateFeeRules         LateFeeRule[]
+  installmentPlans     InstallmentPlan[]
+  invoices             Invoice[]
+  payments             Payment[]
+  recoveryLadder       RecoveryLadder?
+  conversations        Conversation[]
+  messageTemplates     MessageTemplate[]
+  broadcasts           Broadcast[]
+  briefings            Briefing[]
+  importJobs           ImportJob[]
+  invites              InstitutionInvite[]
+  whatsappConnection   WhatsAppConnection?
 
   @@index([status])
   @@index([planId])
@@ -334,10 +360,12 @@ model Group {
   updatedAt     DateTime  @updatedAt @map("updated_at")
   deletedAt     DateTime? @map("deleted_at")
 
-  institution Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
-  branch      Branch?     @relation(fields: [branchId], references: [id])
-  subgroups   Subgroup[]
-  enrollments Enrollment[]
+  institution    Institution     @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  branch         Branch?         @relation(fields: [branchId], references: [id])
+  subgroups      Subgroup[]
+  enrollments    Enrollment[]
+  attendanceSessions AttendanceSession[]
+  feeStructures  FeeStructure[]
 
   @@unique([institutionId, name])
   @@index([institutionId])
@@ -353,8 +381,9 @@ model Subgroup {
   updatedAt     DateTime  @updatedAt @map("updated_at")
   deletedAt     DateTime? @map("deleted_at")
 
-  group       Group        @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  enrollments Enrollment[]
+  group              Group               @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  enrollments        Enrollment[]
+  attendanceSessions AttendanceSession[]
 
   @@unique([groupId, name])
   @@index([institutionId])
@@ -375,10 +404,16 @@ model Student {
   updatedAt     DateTime      @updatedAt @map("updated_at")
   deletedAt     DateTime?     @map("deleted_at")
 
-  institution Institution       @relation(fields: [institutionId], references: [id], onDelete: Cascade)
-  branch      Branch?           @relation(fields: [branchId], references: [id])
-  guardians   StudentGuardian[]
-  enrollments Enrollment[]
+  institution      Institution        @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  branch           Branch?            @relation(fields: [branchId], references: [id])
+  guardians        StudentGuardian[]
+  enrollments      Enrollment[]
+  attendanceRecords AttendanceRecord[]
+  siblingProspects SiblingProspect[]
+  feeAssignments   FeeAssignment[]
+  installmentPlans InstallmentPlan[]
+  invoices         Invoice[]
+  payments         Payment[]
 
   @@unique([institutionId, registrationNo])
   @@index([institutionId, status])
@@ -535,4 +570,858 @@ model JobFailure {
   @@index([institutionId, status])
   @@index([queue, status])
   @@map("job_failures")
+}
+
+// ─── Phase 1 enums ───────────────────────────────────────────────────────────
+
+enum FeeFrequency {
+  MONTHLY
+  QUARTERLY
+  PER_TERM
+  ONE_TIME
+}
+
+enum FeeHeadKind {
+  TUITION
+  ADMISSION
+  EXAM
+  TRANSPORT
+  LAB
+  OTHER
+}
+
+enum DiscountType {
+  SIBLING
+  MERIT
+  STAFF_CHILD
+  SCHOLARSHIP
+  REFERRAL
+  OTHER
+}
+
+enum InvoiceStatus {
+  DRAFT
+  ISSUED
+  PARTIALLY_PAID
+  PAID
+  VOID
+  OVERDUE
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+  REFUNDED
+}
+
+enum PaymentChannel {
+  JAZZCASH
+  EASYPAISA
+  BANK_TRANSFER
+  CASH
+  CHEQUE
+  WALLET
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  EXCUSED
+}
+
+enum LeadStatus {
+  OPEN
+  WON
+  LOST
+}
+
+enum MessageDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum MessageStatus {
+  QUEUED
+  SENT
+  DELIVERED
+  READ
+  FAILED
+  REPLIED
+}
+
+enum TemplateStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+}
+
+enum BroadcastStatus {
+  DRAFT
+  SCHEDULED
+  SENDING
+  SENT
+  CANCELLED
+}
+
+enum SequenceStopCondition {
+  REPLIED
+  BOOKED
+  ADMITTED
+  LOST
+  OPTED_OUT
+}
+
+enum ImportJobStatus {
+  PENDING
+  MAPPING
+  VALIDATING
+  IMPORTING
+  COMPLETED
+  FAILED
+}
+
+enum ConversationStatus {
+  OPEN
+  AI_ACTIVE
+  HUMAN
+  CLOSED
+}
+
+// ─── Phase 1: Attendance ─────────────────────────────────────────────────────
+
+model AttendanceSession {
+  id            String   @id @default(cuid())
+  institutionId String   @map("institution_id")
+  groupId       String   @map("group_id")
+  subgroupId    String?  @map("subgroup_id")
+  date          DateTime @db.Date
+  markedById    String?  @map("marked_by_id")
+  submittedAt   DateTime @default(now()) @map("submitted_at")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  institution Institution        @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  group       Group              @relation(fields: [groupId], references: [id])
+  subgroup    Subgroup?          @relation(fields: [subgroupId], references: [id])
+  records     AttendanceRecord[]
+
+  @@unique([institutionId, groupId, subgroupId, date])
+  @@index([institutionId, date])
+  @@map("attendance_sessions")
+}
+
+model AttendanceRecord {
+  id            String           @id @default(cuid())
+  institutionId String           @map("institution_id")
+  sessionId     String           @map("session_id")
+  studentId     String           @map("student_id")
+  status        AttendanceStatus @default(PRESENT)
+  note          String?
+  alertSentAt   DateTime?        @map("alert_sent_at")
+  createdAt     DateTime         @default(now()) @map("created_at")
+  updatedAt     DateTime         @updatedAt @map("updated_at")
+
+  session AttendanceSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  student Student           @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, studentId])
+  @@index([institutionId, studentId])
+  @@map("attendance_records")
+}
+
+model StaffAttendance {
+  id            String           @id @default(cuid())
+  institutionId String           @map("institution_id")
+  userId        String           @map("user_id")
+  date          DateTime         @db.Date
+  status        AttendanceStatus @default(PRESENT)
+  createdAt     DateTime         @default(now()) @map("created_at")
+  updatedAt     DateTime         @updatedAt @map("updated_at")
+
+  institution Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+
+  @@unique([institutionId, userId, date])
+  @@index([institutionId, date])
+  @@map("staff_attendance")
+}
+
+// ─── Phase 1: Admissions ─────────────────────────────────────────────────────
+
+model LeadSource {
+  id            String   @id @default(cuid())
+  institutionId String   @map("institution_id")
+  name          String
+  code          String
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  institution Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  leads       Lead[]
+
+  @@unique([institutionId, code])
+  @@map("lead_sources")
+}
+
+model LeadStage {
+  id            String   @id @default(cuid())
+  institutionId String   @map("institution_id")
+  name          String
+  slug          String
+  sortOrder     Int      @default(0) @map("sort_order")
+  isWon         Boolean  @default(false) @map("is_won")
+  isLost        Boolean  @default(false) @map("is_lost")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  institution Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  leads       Lead[]
+
+  @@unique([institutionId, slug])
+  @@index([institutionId, sortOrder])
+  @@map("lead_stages")
+}
+
+model Lead {
+  id              String     @id @default(cuid())
+  institutionId   String     @map("institution_id")
+  branchId        String?    @map("branch_id")
+  stageId         String     @map("stage_id")
+  sourceId        String?    @map("source_id")
+  parentName      String     @map("parent_name")
+  phone           String
+  childName       String?    @map("child_name")
+  classSought     String?    @map("class_sought")
+  age             Int?
+  campaign        String?
+  firstMessage    String?    @map("first_message")
+  assignedStaffId String?    @map("assigned_staff_id")
+  nextFollowUpAt  DateTime?  @map("next_follow_up_at")
+  notes           String?
+  lostReason      String?    @map("lost_reason")
+  status          LeadStatus @default(OPEN)
+  isSiblingLead   Boolean    @default(false) @map("is_sibling_lead")
+  referralCode    String?    @map("referral_code")
+  convertedStudentId String? @map("converted_student_id")
+  createdAt       DateTime   @default(now()) @map("created_at")
+  updatedAt       DateTime   @updatedAt @map("updated_at")
+  deletedAt       DateTime?  @map("deleted_at")
+
+  institution Institution    @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  stage       LeadStage      @relation(fields: [stageId], references: [id])
+  source      LeadSource?    @relation(fields: [sourceId], references: [id])
+  activities  LeadActivity[]
+  bookings    Booking[]
+
+  @@index([institutionId, stageId])
+  @@index([institutionId, phone])
+  @@index([institutionId, status])
+  @@map("leads")
+}
+
+model LeadActivity {
+  id            String   @id @default(cuid())
+  institutionId String   @map("institution_id")
+  leadId        String   @map("lead_id")
+  type          String
+  body          String?
+  actorId       String?  @map("actor_id")
+  metadata      Json?
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([institutionId, leadId])
+  @@map("lead_activities")
+}
+
+model BookingSlot {
+  id            String   @id @default(cuid())
+  institutionId String   @map("institution_id")
+  branchId      String?  @map("branch_id")
+  startsAt      DateTime @map("starts_at")
+  endsAt        DateTime @map("ends_at")
+  capacity      Int      @default(5)
+  title         String?
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  institution Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  bookings    Booking[]
+
+  @@index([institutionId, startsAt])
+  @@map("booking_slots")
+}
+
+model Booking {
+  id            String   @id @default(cuid())
+  institutionId String   @map("institution_id")
+  slotId        String   @map("slot_id")
+  leadId        String?  @map("lead_id")
+  guardianName  String   @map("guardian_name")
+  phone         String
+  status        String   @default("BOOKED")
+  notes         String?
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  slot BookingSlot @relation(fields: [slotId], references: [id], onDelete: Cascade)
+  lead Lead?       @relation(fields: [leadId], references: [id])
+
+  @@index([institutionId, status])
+  @@map("bookings")
+}
+
+model Referral {
+  id            String   @id @default(cuid())
+  institutionId String   @map("institution_id")
+  code          String
+  guardianId    String?  @map("guardian_id")
+  rewardPaisa   Int      @default(0) @map("reward_paisa")
+  uses          Int      @default(0)
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  institution Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+
+  @@unique([institutionId, code])
+  @@map("referrals")
+}
+
+model SiblingProspect {
+  id             String   @id @default(cuid())
+  institutionId  String   @map("institution_id")
+  studentId      String   @map("student_id")
+  siblingName    String   @map("sibling_name")
+  expectedYear   Int      @map("expected_year")
+  notes          String?
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  institution Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  student     Student     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([institutionId, expectedYear])
+  @@map("sibling_prospects")
+}
+
+model KnowledgeBaseEntry {
+  id            String   @id @default(cuid())
+  institutionId String   @map("institution_id")
+  category      String
+  title         String
+  body          String
+  tags          String[] @default([])
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  institution Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+
+  @@index([institutionId, category])
+  @@map("knowledge_base_entries")
+}
+
+model AIInteraction {
+  id            String   @id @default(cuid())
+  institutionId String   @map("institution_id")
+  conversationId String? @map("conversation_id")
+  promptVersion String   @map("prompt_version")
+  input         String
+  output        String
+  sources       Json?
+  latencyMs     Int      @map("latency_ms")
+  costPaisa     Int      @default(0) @map("cost_paisa")
+  rating        Int?
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  institution Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+
+  @@index([institutionId, createdAt])
+  @@map("ai_interactions")
+}
+
+model Sequence {
+  id            String   @id @default(cuid())
+  institutionId String   @map("institution_id")
+  name          String
+  description   String?
+  isActive      Boolean  @default(true) @map("is_active")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  institution Institution          @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  steps       SequenceStep[]
+  enrollments SequenceEnrollment[]
+
+  @@index([institutionId])
+  @@map("sequences")
+}
+
+model SequenceStep {
+  id            String                 @id @default(cuid())
+  institutionId String                 @map("institution_id")
+  sequenceId    String                 @map("sequence_id")
+  dayOffset     Int                    @map("day_offset")
+  templateBody  String                 @map("template_body")
+  stopOn        SequenceStopCondition[] @default([])
+  sortOrder     Int                    @default(0) @map("sort_order")
+  createdAt     DateTime               @default(now()) @map("created_at")
+  updatedAt     DateTime               @updatedAt @map("updated_at")
+
+  sequence Sequence @relation(fields: [sequenceId], references: [id], onDelete: Cascade)
+
+  @@index([institutionId, sequenceId])
+  @@map("sequence_steps")
+}
+
+model SequenceEnrollment {
+  id            String    @id @default(cuid())
+  institutionId String    @map("institution_id")
+  sequenceId    String    @map("sequence_id")
+  leadId        String    @map("lead_id")
+  status        String    @default("ACTIVE")
+  nextStepAt    DateTime? @map("next_step_at")
+  currentStep   Int       @default(0) @map("current_step")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  sequence Sequence @relation(fields: [sequenceId], references: [id], onDelete: Cascade)
+
+  @@unique([sequenceId, leadId])
+  @@index([institutionId, status])
+  @@map("sequence_enrollments")
+}
+
+// ─── Phase 1: Fees ───────────────────────────────────────────────────────────
+
+model FeeHead {
+  id            String      @id @default(cuid())
+  institutionId String      @map("institution_id")
+  name          String
+  kind          FeeHeadKind @default(TUITION)
+  createdAt     DateTime    @default(now()) @map("created_at")
+  updatedAt     DateTime    @updatedAt @map("updated_at")
+
+  institution Institution    @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  structures  FeeStructure[]
+
+  @@unique([institutionId, name])
+  @@map("fee_heads")
+}
+
+model FeeStructure {
+  id            String       @id @default(cuid())
+  institutionId String       @map("institution_id")
+  feeHeadId     String       @map("fee_head_id")
+  groupId       String?      @map("group_id")
+  amountPaisa   Int          @map("amount_paisa")
+  frequency     FeeFrequency @default(MONTHLY)
+  name          String
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
+  deletedAt     DateTime?    @map("deleted_at")
+
+  institution Institution     @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  feeHead     FeeHead         @relation(fields: [feeHeadId], references: [id])
+  group       Group?          @relation(fields: [groupId], references: [id])
+  assignments FeeAssignment[]
+
+  @@index([institutionId, groupId])
+  @@map("fee_structures")
+}
+
+model FeeAssignment {
+  id              String    @id @default(cuid())
+  institutionId   String    @map("institution_id")
+  feeStructureId  String    @map("fee_structure_id")
+  studentId       String    @map("student_id")
+  amountOverridePaisa Int?  @map("amount_override_paisa")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  deletedAt       DateTime? @map("deleted_at")
+
+  feeStructure FeeStructure @relation(fields: [feeStructureId], references: [id], onDelete: Cascade)
+  student      Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([feeStructureId, studentId])
+  @@index([institutionId])
+  @@map("fee_assignments")
+}
+
+model Discount {
+  id            String       @id @default(cuid())
+  institutionId String       @map("institution_id")
+  name          String
+  type          DiscountType
+  kind          String       @default("PERCENT")
+  value         Int
+  active        Boolean      @default(true)
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
+
+  institution Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+
+  @@index([institutionId])
+  @@map("discounts")
+}
+
+model LateFeeRule {
+  id            String   @id @default(cuid())
+  institutionId String   @map("institution_id")
+  name          String
+  kind          String
+  amountPaisa   Int      @map("amount_paisa")
+  capPaisa      Int?     @map("cap_paisa")
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  institution Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+
+  @@index([institutionId])
+  @@map("late_fee_rules")
+}
+
+model InstallmentPlan {
+  id            String   @id @default(cuid())
+  institutionId String   @map("institution_id")
+  studentId     String   @map("student_id")
+  totalPaisa    Int      @map("total_paisa")
+  count         Int
+  schedule      Json
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  institution Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  student     Student     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([institutionId, studentId])
+  @@map("installment_plans")
+}
+
+model Invoice {
+  id              String        @id @default(cuid())
+  institutionId   String        @map("institution_id")
+  studentId       String        @map("student_id")
+  number          String
+  status          InvoiceStatus @default(ISSUED)
+  issueDate       DateTime      @map("issue_date") @db.Date
+  dueDate         DateTime      @map("due_date") @db.Date
+  subtotalPaisa   Int           @map("subtotal_paisa")
+  discountPaisa   Int           @default(0) @map("discount_paisa")
+  lateFeePaisa    Int           @default(0) @map("late_fee_paisa")
+  totalPaisa      Int           @map("total_paisa")
+  paidPaisa       Int           @default(0) @map("paid_paisa")
+  paymentLinkToken String?      @unique @map("payment_link_token")
+  promiseToPayOn  DateTime?     @map("promise_to_pay_on") @db.Date
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+  deletedAt       DateTime?     @map("deleted_at")
+
+  institution Institution         @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  student     Student             @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  lines       InvoiceLine[]
+  allocations PaymentAllocation[]
+  recoveryRuns RecoveryRun[]
+
+  @@unique([institutionId, number])
+  @@index([institutionId, status, dueDate])
+  @@index([institutionId, studentId])
+  @@map("invoices")
+}
+
+model InvoiceLine {
+  id            String @id @default(cuid())
+  institutionId String @map("institution_id")
+  invoiceId     String @map("invoice_id")
+  description   String
+  amountPaisa   Int    @map("amount_paisa")
+  feeHeadKind   String? @map("fee_head_kind")
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([institutionId, invoiceId])
+  @@map("invoice_lines")
+}
+
+model Payment {
+  id                 String         @id @default(cuid())
+  institutionId      String         @map("institution_id")
+  studentId          String?        @map("student_id")
+  channel            PaymentChannel
+  status             PaymentStatus  @default(PENDING)
+  amountPaisa        Int            @map("amount_paisa")
+  providerPaymentId  String?        @map("provider_payment_id")
+  idempotencyKey     String         @map("idempotency_key")
+  proofUrl           String?        @map("proof_url")
+  receivedAt         DateTime?      @map("received_at")
+  note               String?
+  createdAt          DateTime       @default(now()) @map("created_at")
+  updatedAt          DateTime       @updatedAt @map("updated_at")
+
+  institution Institution         @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  student     Student?            @relation(fields: [studentId], references: [id])
+  allocations PaymentAllocation[]
+  refunds     Refund[]
+
+  @@unique([institutionId, idempotencyKey])
+  @@unique([institutionId, providerPaymentId])
+  @@index([institutionId, status])
+  @@map("payments")
+}
+
+model PaymentAllocation {
+  id            String @id @default(cuid())
+  institutionId String @map("institution_id")
+  paymentId     String @map("payment_id")
+  invoiceId     String @map("invoice_id")
+  amountPaisa   Int    @map("amount_paisa")
+
+  payment Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([institutionId])
+  @@map("payment_allocations")
+}
+
+model Refund {
+  id            String   @id @default(cuid())
+  institutionId String   @map("institution_id")
+  paymentId     String   @map("payment_id")
+  amountPaisa   Int      @map("amount_paisa")
+  reason        String?
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  payment Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  @@index([institutionId])
+  @@map("refunds")
+}
+
+model RecoveryLadder {
+  id            String   @id @default(cuid())
+  institutionId String   @unique @map("institution_id")
+  name          String   @default("Default")
+  isActive      Boolean  @default(true) @map("is_active")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  institution Institution    @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  steps       RecoveryStep[]
+  runs        RecoveryRun[]
+
+  @@map("recovery_ladders")
+}
+
+model RecoveryStep {
+  id            String @id @default(cuid())
+  institutionId String @map("institution_id")
+  ladderId      String @map("ladder_id")
+  dayOffset     Int    @map("day_offset")
+  channel       String @default("WHATSAPP_TEXT")
+  templateBody  String @map("template_body")
+  sortOrder     Int    @default(0) @map("sort_order")
+
+  ladder RecoveryLadder @relation(fields: [ladderId], references: [id], onDelete: Cascade)
+
+  @@index([institutionId, ladderId])
+  @@map("recovery_steps")
+}
+
+model RecoveryRun {
+  id            String   @id @default(cuid())
+  institutionId String   @map("institution_id")
+  ladderId      String   @map("ladder_id")
+  invoiceId     String   @map("invoice_id")
+  stepDayOffset Int      @map("step_day_offset")
+  status        String   @default("SENT")
+  sentAt        DateTime @default(now()) @map("sent_at")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  ladder  RecoveryLadder @relation(fields: [ladderId], references: [id], onDelete: Cascade)
+  invoice Invoice        @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@unique([invoiceId, stepDayOffset])
+  @@index([institutionId])
+  @@map("recovery_runs")
+}
+
+// ─── Phase 1: Messaging ──────────────────────────────────────────────────────
+
+model Conversation {
+  id              String             @id @default(cuid())
+  institutionId   String             @map("institution_id")
+  phone           String
+  guardianId      String?            @map("guardian_id")
+  leadId          String?            @map("lead_id")
+  status          ConversationStatus @default(OPEN)
+  assignedStaffId String?            @map("assigned_staff_id")
+  aiPaused        Boolean            @default(false) @map("ai_paused")
+  windowExpiresAt DateTime?          @map("window_expires_at")
+  lastMessageAt   DateTime?          @map("last_message_at")
+  labels          String[]           @default([])
+  createdAt       DateTime           @default(now()) @map("created_at")
+  updatedAt       DateTime           @updatedAt @map("updated_at")
+
+  institution Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  messages    Message[]
+
+  @@unique([institutionId, phone])
+  @@index([institutionId, status, lastMessageAt])
+  @@map("conversations")
+}
+
+model Message {
+  id                String           @id @default(cuid())
+  institutionId     String           @map("institution_id")
+  conversationId    String           @map("conversation_id")
+  direction         MessageDirection
+  body              String
+  status            MessageStatus    @default(QUEUED)
+  providerMessageId String?          @map("provider_message_id")
+  idempotencyKey    String?          @map("idempotency_key")
+  templateName      String?          @map("template_name")
+  isAi              Boolean          @default(false) @map("is_ai")
+  createdAt         DateTime         @default(now()) @map("created_at")
+  updatedAt         DateTime         @updatedAt @map("updated_at")
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@unique([institutionId, idempotencyKey])
+  @@index([institutionId, conversationId, createdAt])
+  @@map("messages")
+}
+
+model MessageTemplate {
+  id            String         @id @default(cuid())
+  institutionId String         @map("institution_id")
+  name          String
+  language      String         @default("en")
+  category      String         @default("UTILITY")
+  body          String
+  status        TemplateStatus @default(DRAFT)
+  metaTemplateId String?       @map("meta_template_id")
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
+
+  institution Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+
+  @@unique([institutionId, name, language])
+  @@map("message_templates")
+}
+
+model Broadcast {
+  id            String          @id @default(cuid())
+  institutionId String          @map("institution_id")
+  title         String
+  body          String
+  status        BroadcastStatus @default(DRAFT)
+  audienceFilter Json?          @map("audience_filter")
+  scheduledAt   DateTime?       @map("scheduled_at")
+  sentAt        DateTime?       @map("sent_at")
+  estimatedCostPaisa Int?       @map("estimated_cost_paisa")
+  createdAt     DateTime        @default(now()) @map("created_at")
+  updatedAt     DateTime        @updatedAt @map("updated_at")
+
+  institution Institution          @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  recipients  BroadcastRecipient[]
+
+  @@index([institutionId, status])
+  @@map("broadcasts")
+}
+
+model BroadcastRecipient {
+  id            String        @id @default(cuid())
+  institutionId String        @map("institution_id")
+  broadcastId   String        @map("broadcast_id")
+  guardianId    String?       @map("guardian_id")
+  phone         String
+  status        MessageStatus @default(QUEUED)
+  error         String?
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+
+  broadcast Broadcast @relation(fields: [broadcastId], references: [id], onDelete: Cascade)
+
+  @@index([institutionId, broadcastId])
+  @@map("broadcast_recipients")
+}
+
+model OptInRecord {
+  id            String   @id @default(cuid())
+  institutionId String   @map("institution_id")
+  guardianId    String   @map("guardian_id")
+  optedIn       Boolean
+  source        String
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@index([institutionId, guardianId])
+  @@map("opt_in_records")
+}
+
+model Briefing {
+  id            String   @id @default(cuid())
+  institutionId String   @map("institution_id")
+  branchId      String?  @map("branch_id")
+  recipientUserId String @map("recipient_user_id")
+  body          String
+  generatedAt   DateTime @default(now()) @map("generated_at")
+  sentAt        DateTime? @map("sent_at")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  institution Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+
+  @@index([institutionId, generatedAt])
+  @@map("briefings")
+}
+
+model ImportJob {
+  id            String          @id @default(cuid())
+  institutionId String          @map("institution_id")
+  filename      String
+  status        ImportJobStatus @default(PENDING)
+  totalRows     Int             @default(0) @map("total_rows")
+  successRows   Int             @default(0) @map("success_rows")
+  errorRows     Int             @default(0) @map("error_rows")
+  mapping       Json?
+  errorReport   Json?
+  createdAt     DateTime        @default(now()) @map("created_at")
+  updatedAt     DateTime        @updatedAt @map("updated_at")
+
+  institution Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+
+  @@index([institutionId, status])
+  @@map("import_jobs")
+}
+
+model InstitutionInvite {
+  id            String   @id @default(cuid())
+  institutionId String   @map("institution_id")
+  email         String
+  roleName      String   @map("role_name")
+  token         String   @unique
+  acceptedAt    DateTime? @map("accepted_at")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  institution Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+
+  @@index([institutionId])
+  @@map("institution_invites")
+}
+
+model WhatsAppConnection {
+  id            String   @id @default(cuid())
+  institutionId String   @unique @map("institution_id")
+  mode          String   @default("SANDBOX")
+  phoneNumberId String?  @map("phone_number_id")
+  displayNumber String?  @map("display_number")
+  connectedAt   DateTime? @map("connected_at")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  institution Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+
+  @@map("whatsapp_connections")
 }

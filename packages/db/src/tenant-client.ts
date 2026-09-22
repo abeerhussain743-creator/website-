@@ -19,6 +19,46 @@ export const TENANT_MODELS = [
   "webhookEvent",
   "jobFailure",
   "institutionEntitlementOverride",
+  "attendanceSession",
+  "attendanceRecord",
+  "staffAttendance",
+  "leadSource",
+  "leadStage",
+  "lead",
+  "leadActivity",
+  "bookingSlot",
+  "booking",
+  "referral",
+  "siblingProspect",
+  "knowledgeBaseEntry",
+  "aIInteraction",
+  "sequence",
+  "sequenceStep",
+  "sequenceEnrollment",
+  "feeHead",
+  "feeStructure",
+  "feeAssignment",
+  "discount",
+  "lateFeeRule",
+  "installmentPlan",
+  "invoice",
+  "invoiceLine",
+  "payment",
+  "paymentAllocation",
+  "refund",
+  "recoveryLadder",
+  "recoveryStep",
+  "recoveryRun",
+  "conversation",
+  "message",
+  "messageTemplate",
+  "broadcast",
+  "broadcastRecipient",
+  "optInRecord",
+  "briefing",
+  "importJob",
+  "institutionInvite",
+  "whatsAppConnection",
 ] as const;
 
 export type TenantModel = (typeof TENANT_MODELS)[number];
@@ -89,7 +129,6 @@ function buildTenantClient(base: PrismaClient, institutionId: string) {
         async $allOperations({ model, operation, args, query }) {
           const modelName = model.charAt(0).toLowerCase() + model.slice(1);
           if (!TENANT_MODELS.includes(modelName as TenantModel)) {
-            // Institution itself is readable only by exact id match via helpers
             if (modelName === "institution") {
               if (operation === "findUnique" || operation === "findFirst") {
                 return query(args);
@@ -123,15 +162,14 @@ function buildTenantClient(base: PrismaClient, institutionId: string) {
           }
           if (operation === "create" || operation === "upsert") {
             nextArgs = injectData(nextArgs, institutionId, false);
-            if (operation === "upsert" && nextArgs.update) {
-              // keep update as-is but still scoped by where
-            }
           }
           if (operation === "createMany") {
             nextArgs = injectData(nextArgs, institutionId, true);
           }
-          if (opsNeedingData.includes(operation) === false && opsNeedingWhere.includes(operation) === false) {
-            // unknown op — still inject where when present
+          if (
+            opsNeedingData.includes(operation) === false &&
+            opsNeedingWhere.includes(operation) === false
+          ) {
             if (nextArgs && typeof nextArgs === "object" && "where" in nextArgs) {
               nextArgs = injectWhere(nextArgs, institutionId);
             }
@@ -146,10 +184,6 @@ function buildTenantClient(base: PrismaClient, institutionId: string) {
   return base.$extends(extension);
 }
 
-/**
- * Returns a Prisma client that injects `institutionId` into every tenant model query.
- * Cross-tenant filters / writes throw `TenantScopeError`.
- */
 export function createTenantClient(base: PrismaClient, institutionId: string): TenantClient {
   return buildTenantClient(base, institutionId);
 }
