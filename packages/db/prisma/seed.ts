@@ -508,6 +508,193 @@ async function main() {
     });
   }
 
+  // Phase 2/3 demo data
+  const math = await prisma.subject.upsert({
+    where: {
+      institutionId_name: { institutionId: institution.id, name: "Mathematics" },
+    },
+    update: {},
+    create: {
+      institutionId: institution.id,
+      name: "Mathematics",
+      code: "MATH",
+    },
+  });
+
+  let demoTest = await prisma.test.findFirst({
+    where: { institutionId: institution.id, title: "Class 8 Math Quiz" },
+  });
+  if (!demoTest) {
+    demoTest = await prisma.test.create({
+      data: {
+        institutionId: institution.id,
+        subjectId: math.id,
+        groupId: class8.id,
+        title: "Class 8 Math Quiz",
+        totalMarks: 10,
+        testDate: new Date("2026-09-15"),
+      },
+    });
+    await prisma.testQuestion.createMany({
+      data: [
+        {
+          institutionId: institution.id,
+          testId: demoTest.id,
+          number: 1,
+          topic: "Algebra",
+          marks: 2,
+          correctOption: "A",
+        },
+        {
+          institutionId: institution.id,
+          testId: demoTest.id,
+          number: 2,
+          topic: "Geometry",
+          marks: 2,
+          correctOption: "B",
+        },
+        {
+          institutionId: institution.id,
+          testId: demoTest.id,
+          number: 3,
+          topic: "Fractions",
+          marks: 2,
+          correctOption: "C",
+        },
+        {
+          institutionId: institution.id,
+          testId: demoTest.id,
+          number: 4,
+          topic: "Algebra",
+          marks: 2,
+          correctOption: "A",
+        },
+        {
+          institutionId: institution.id,
+          testId: demoTest.id,
+          number: 5,
+          topic: "Word problems",
+          marks: 2,
+          correctOption: "D",
+        },
+      ],
+    });
+    await prisma.mark.create({
+      data: {
+        institutionId: institution.id,
+        testId: demoTest.id,
+        studentId: student.id,
+        score: 8,
+        rank: 1,
+        weakTopics: ["Word problems"],
+      },
+    });
+  }
+
+  const syllabus = await prisma.syllabusDocument.findFirst({
+    where: { institutionId: institution.id, title: "Science Class 8" },
+  });
+  if (!syllabus) {
+    const doc = await prisma.syllabusDocument.create({
+      data: {
+        institutionId: institution.id,
+        title: "Science Class 8",
+        board: "Sindh Board",
+        grade: "8",
+        subject: "Science",
+        status: "READY",
+      },
+    });
+    await prisma.syllabusChunk.create({
+      data: {
+        institutionId: institution.id,
+        documentId: doc.id,
+        chapter: "2",
+        topic: "Photosynthesis",
+        page: 55,
+        content:
+          "Photosynthesis converts light energy into chemical energy in plants using chlorophyll. The light reaction and dark reaction (Calvin cycle) work together.",
+        embedding: [0.12, 0.44, 0.09],
+      },
+    });
+  }
+
+  await prisma.tutorEnrollment.upsert({
+    where: {
+      institutionId_studentId: {
+        institutionId: institution.id,
+        studentId: student.id,
+      },
+    },
+    update: { active: true, parentConsentAt: new Date() },
+    create: {
+      institutionId: institution.id,
+      studentId: student.id,
+      parentConsentAt: new Date(),
+      dailyCap: 40,
+      active: true,
+    },
+  }).then(async (enroll) => {
+    const sub = await prisma.tutorSubscription.findFirst({
+      where: { enrollmentId: enroll.id, status: "ACTIVE" },
+    });
+    if (!sub) {
+      await prisma.tutorSubscription.create({
+        data: {
+          institutionId: institution.id,
+          enrollmentId: enroll.id,
+          pricePaisa: 75_000,
+          status: "ACTIVE",
+        },
+      });
+    }
+  });
+
+  const existingRoute = await prisma.transportRoute.findFirst({
+    where: { institutionId: institution.id, name: "Gulberg Route" },
+  });
+  if (!existingRoute) {
+    await prisma.transportRoute.create({
+      data: {
+        institutionId: institution.id,
+        name: "Gulberg Route",
+        driverPhone: "+923007778889",
+        vehicleLabel: "Van LE-88",
+      },
+    });
+  }
+
+  await prisma.competitorWatch.create({
+    data: {
+      institutionId: institution.id,
+      name: "City Stars Academy",
+      area: "Gulberg",
+      feeNotes: "PKR 18,000/month Class 8",
+      batchNotes: "Evening batch 4–6pm",
+      adNotes: "Facebook ads pushing free demo",
+      lastCheckedAt: new Date(),
+    },
+  }).catch(() => null);
+
+  await prisma.instagramConnection.upsert({
+    where: { institutionId: institution.id },
+    update: { pageId: "sandbox-page", connectedAt: new Date() },
+    create: {
+      institutionId: institution.id,
+      pageId: "sandbox-page",
+      connectedAt: new Date(),
+    },
+  });
+
+  await prisma.knowledgeBaseEntry.create({
+    data: {
+      institutionId: institution.id,
+      category: "calendar",
+      title: "School holidays",
+      body: "School is open Monday–Friday. Next PTM is on the first Saturday of next month.",
+    },
+  }).catch(() => null);
+
   // Second institution for isolation tests / demos
   const rival = await prisma.institution.upsert({
     where: { slug: "bright-coaching" },

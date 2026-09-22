@@ -3,6 +3,7 @@ import { requireTenantContext } from "@/lib/tenant";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, Button } from "@maxtrone/ui";
 import { hasFeature, resolveEntitlements } from "@maxtrone/core";
 import { prisma } from "@maxtrone/db";
+import { connectInstagramSandbox } from "@/actions/phase23";
 
 export default async function SettingsPage() {
   const { institution, session } = await requireTenantContext();
@@ -11,7 +12,7 @@ export default async function SettingsPage() {
     institution.entitlementOverrides,
   );
 
-  const [templates, knowledge, wa, audit, invites] = await Promise.all([
+  const [templates, knowledge, wa, ig, audit, invites] = await Promise.all([
     prisma.messageTemplate.findMany({
       where: { institutionId: institution.id },
       take: 20,
@@ -21,6 +22,9 @@ export default async function SettingsPage() {
       take: 20,
     }),
     prisma.whatsAppConnection.findUnique({
+      where: { institutionId: institution.id },
+    }),
+    prisma.instagramConnection.findUnique({
       where: { institutionId: institution.id },
     }),
     prisma.auditLog.findMany({
@@ -98,7 +102,7 @@ export default async function SettingsPage() {
           </CardHeader>
           <CardContent>
             <ul className="grid gap-2 sm:grid-cols-2">
-              {["admissions", "fees", "ai_admissions", "briefing", "whatsapp_inbox", "ai_tutor"].map(
+              {["admissions", "fees", "ai_admissions", "briefing", "whatsapp_inbox", "ai_tutor", "voice_calls"].map(
                 (f) => (
                   <li key={f} className="rounded-[12px] border border-[var(--border)] px-3 py-2 text-sm">
                     {f}: {hasFeature(entitlements, f) ? "enabled" : "locked"}
@@ -106,6 +110,25 @@ export default async function SettingsPage() {
                 ),
               )}
             </ul>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Instagram DMs</CardTitle>
+            <CardDescription>Phase 2 sandbox connection</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3 text-sm">
+            <p>Page: {ig?.pageId ?? "not connected"}</p>
+            <p>
+              Connected:{" "}
+              {ig?.connectedAt ? ig.connectedAt.toISOString().slice(0, 10) : "—"}
+            </p>
+            <form action={connectInstagramSandbox}>
+              <Button type="submit" variant="outline">
+                {ig ? "Reconnect sandbox" : "Connect sandbox"}
+              </Button>
+            </form>
           </CardContent>
         </Card>
       </div>

@@ -12,6 +12,16 @@ import {
   Inbox,
   Building2,
   Upload,
+  Mic,
+  GraduationCap,
+  AlertTriangle,
+  LineChart,
+  Gift,
+  Bot,
+  ClipboardList,
+  Radar,
+  Bus,
+  Link2,
 } from "lucide-react";
 import { cn } from "@maxtrone/ui";
 
@@ -22,6 +32,17 @@ const links = [
   { href: "/admissions", label: "Admissions", icon: Building2 },
   { href: "/fees", label: "Fees", icon: Wallet },
   { href: "/attendance", label: "Attendance", icon: ClipboardCheck },
+  { href: "/tests", label: "Tests", icon: GraduationCap },
+  { href: "/progress", label: "Progress", icon: ClipboardList },
+  { href: "/risk", label: "At-risk", icon: AlertTriangle },
+  { href: "/roi", label: "ROI", icon: LineChart },
+  { href: "/voice", label: "Voice", icon: Mic },
+  { href: "/tutor", label: "AI Tutor", icon: Bot },
+  { href: "/referrals", label: "Referrals", icon: Gift },
+  { href: "/surveys", label: "Surveys", icon: ClipboardList },
+  { href: "/competitors", label: "Competitors", icon: Radar },
+  { href: "/transport", label: "Transport", icon: Bus },
+  { href: "/portal", label: "Parent links", icon: Link2 },
   { href: "/inbox", label: "Inbox", icon: Inbox },
   { href: "/broadcasts", label: "Broadcasts", icon: MessageSquare },
   { href: "/settings", label: "Settings", icon: Settings },
@@ -46,7 +67,7 @@ export function Sidebar({
           {institutionName}
         </p>
       </div>
-      <nav className="flex flex-1 flex-col gap-1 p-3">
+      <nav className="flex flex-1 flex-col gap-1 overflow-y-auto p-3">
         {links.map((link) => {
           const Icon = link.icon;
           const active =

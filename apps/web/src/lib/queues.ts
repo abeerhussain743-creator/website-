@@ -9,6 +9,9 @@ const globalForQueues = globalThis as unknown as {
     recovery: Queue;
     briefing: Queue;
     invoices: Queue;
+    academics: Queue;
+    intelligence: Queue;
+    transport: Queue;
   };
   maxtroneRedis?: Redis;
 };
@@ -33,6 +36,9 @@ export function getQueues() {
       recovery: new Queue("recovery", { connection: conn }),
       briefing: new Queue("briefing", { connection: conn }),
       invoices: new Queue("invoices", { connection: conn }),
+      academics: new Queue("academics", { connection: conn }),
+      intelligence: new Queue("intelligence", { connection: conn }),
+      transport: new Queue("transport", { connection: conn }),
     };
   }
   return globalForQueues.maxtroneQueues;
