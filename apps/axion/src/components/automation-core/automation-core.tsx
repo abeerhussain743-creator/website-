@@ -171,7 +171,6 @@ function CoreScene({
 
   return (
     <>
-      <color attach="background" args={["#00000000"]} />
       <ambientLight intensity={0.35} />
       <pointLight position={[4, 3, 5]} intensity={1.2} color="#9ad4ef" />
       <pointLight position={[-4, -2, -3]} intensity={0.55} color="#4a7fa0" />
@@ -276,8 +275,16 @@ export function AutomationCore({
       <Canvas
         dpr={[1, 1.5]}
         camera={{ position: [0, 0.2, 7.2], fov: 42 }}
-        gl={{ antialias: true, alpha: true, powerPreference: "high-performance" }}
-        style={{ width: "100%", height: "100%" }}
+        gl={{
+          antialias: true,
+          alpha: true,
+          powerPreference: "high-performance",
+          premultipliedAlpha: true,
+        }}
+        onCreated={({ gl }) => {
+          gl.setClearColor(0x000000, 0);
+        }}
+        style={{ width: "100%", height: "100%", background: "transparent" }}
       >
         <Suspense fallback={null}>
           <CoreScene
