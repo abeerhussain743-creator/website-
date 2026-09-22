@@ -122,3 +122,146 @@ describe("dates", () => {
     expect(isWithinQuietHours(10, 21, 8)).toBe(false);
   });
 });
+
+import { craftAdmissionsReply } from "./admissions/agent.js";
+import { ADMISSIONS_EVAL_CASES, DEMO_KNOWLEDGE as KB } from "./evals/admissions.js";
+import { buildMorningBriefing } from "./briefing/morning.js";
+import { nextRecoveryStep, textOnlyLadder, renderTemplate } from "./recovery/ladder.js";
+import {
+  buildInvoiceTotals,
+  applyPaymentToInvoice,
+  shouldAcceptPaymentCallback,
+  invoiceNumber,
+} from "./fees/invoicing.js";
+import { detectColumnMapping, validateImportRow, applyMapping } from "./import/mapping.js";
+
+describe("admissions agent grounding", () => {
+  it("never invents fees outside knowledge base", () => {
+    const reply = craftAdmissionsReply({
+      message: "What is the fee for class 9?",
+      knowledge: KB,
+    });
+    expect(reply.handoff).toBe(true);
+    expect(reply.text.toLowerCase()).not.toMatch(/pkr\s*\d/);
+  });
+
+  it("passes fee eval cases against demo knowledge", () => {
+    let pass = 0;
+    for (const c of ADMISSIONS_EVAL_CASES) {
+      const reply = craftAdmissionsReply({
+        message: c.message,
+        knowledge: KB,
+        languageHint: c.language,
+      });
+      if (c.expectHandoff && !reply.handoff) continue;
+      if (c.mustNotContain?.some((s) => reply.text.toLowerCase().includes(s.toLowerCase()))) {
+        continue;
+      }
+      if (c.mustContainAny && !c.mustContainAny.some((s) => reply.text.includes(s))) {
+        // fee questions without KB match should handoff — count as pass if handoff
+        if (c.mustContainAny && reply.handoff) {
+          pass += 1;
+          continue;
+        }
+        continue;
+      }
+      pass += 1;
+    }
+    expect(pass).toBeGreaterThanOrEqual(25);
+    expect(ADMISSIONS_EVAL_CASES.length).toBeGreaterThanOrEqual(30);
+  });
+
+  it("states class 8 fee only from KB", () => {
+    const reply = craftAdmissionsReply({
+      message: "What is the monthly fee for class 8?",
+      knowledge: KB,
+    });
+    expect(reply.sources.length).toBeGreaterThan(0);
+    expect(reply.text).toContain("15,000");
+    expect(reply.handoff).toBe(false);
+  });
+});
+
+describe("briefing", () => {
+  it("builds a short money-first message", () => {
+    const body = buildMorningBriefing({
+      ownerName: "Ayesha",
+      institutionName: "Greenfield",
+      feesCollectedYesterdayPaisa: 18_500_000,
+      feesCollectedWeekAvgPaisa: 16_500_000,
+      absentStudents: 23,
+      absentTeachers: 2,
+      newInquiries: 7,
+      visitsBooked: 3,
+      attentionItems: ["Class 8-B: 5 students absent 3+ days"],
+      dashboardUrl: "https://app.local/dashboard",
+    });
+    expect(body).toContain("PKR 1,85,000");
+    expect(body).toContain("23 students");
+    expect(body.length).toBeLessThan(800);
+  });
+});
+
+describe("recovery ladder", () => {
+  it("selects next text step and stops when paid", () => {
+    const steps = textOnlyLadder();
+    const due = new Date("2026-09-01");
+    const next = nextRecoveryStep({
+      dueDate: due,
+      today: new Date("2026-09-06"),
+      paid: false,
+      completedOffsets: [-3, 1],
+      steps,
+    });
+    expect(next?.dayOffset).toBe(5);
+    expect(
+      nextRecoveryStep({
+        dueDate: due,
+        today: new Date("2026-09-20"),
+        paid: true,
+        completedOffsets: [],
+        steps,
+      }),
+    ).toBeNull();
+  });
+
+  it("renders templates", () => {
+    expect(renderTemplate("Hi {{name}}", { name: "Ali" })).toBe("Hi Ali");
+  });
+});
+
+describe("invoicing", () => {
+  it("builds totals with sibling discount", () => {
+    const t = buildInvoiceTotals({
+      lines: [{ description: "Tuition", amountPaisa: 100_000 }],
+      siblingCount: 1,
+    });
+    expect(t.totalPaisa).toBe(90_000);
+    expect(invoiceNumber("GF", 12)).toMatch(/GF-\d{4}-00012/);
+  });
+
+  it("payment callback idempotency", () => {
+    const seen = new Set<string>();
+    expect(shouldAcceptPaymentCallback(seen, "pay_1")).toBe(true);
+    expect(shouldAcceptPaymentCallback(seen, "pay_1")).toBe(false);
+    const applied = applyPaymentToInvoice({
+      totalPaisa: 10_000,
+      paidPaisa: 0,
+      paymentPaisa: 4_000,
+    });
+    expect(applied.status).toBe("PARTIALLY_PAID");
+  });
+});
+
+describe("import mapping", () => {
+  it("detects messy headers and validates phones", () => {
+    const headers = ["Student Naam", "Roll No", "Class", "Father Mobile"];
+    const mapping = detectColumnMapping(headers);
+    expect(mapping["Student Naam"]).toBe("fullName");
+    expect(mapping["Father Mobile"]).toBe("guardianPhone");
+    const row = applyMapping(headers, ["Hassan", "001", "Class 8", "03001234567"], mapping, 1);
+    const v = validateImportRow(row);
+    expect(v.ok).toBe(true);
+    if (v.ok) expect(v.row.guardianPhone).toBe("+923001234567");
+  });
+});

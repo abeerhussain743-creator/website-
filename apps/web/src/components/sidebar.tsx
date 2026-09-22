@@ -11,12 +11,14 @@ import {
   ClipboardCheck,
   Inbox,
   Building2,
+  Upload,
 } from "lucide-react";
 import { cn } from "@maxtrone/ui";
 
 const links = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/students", label: "Students", icon: Users },
+  { href: "/imports", label: "Import", icon: Upload },
   { href: "/admissions", label: "Admissions", icon: Building2 },
   { href: "/fees", label: "Fees", icon: Wallet },
   { href: "/attendance", label: "Attendance", icon: ClipboardCheck },

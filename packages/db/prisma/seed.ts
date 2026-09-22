@@ -317,6 +317,197 @@ async function main() {
     });
   }
 
+  // Phase 1 demo data
+  const stageDefs = [
+    { name: "New", slug: "new", sortOrder: 0 },
+    { name: "Contacted", slug: "contacted", sortOrder: 1 },
+    { name: "Visit / Demo booked", slug: "visit_booked", sortOrder: 2 },
+    { name: "Visited", slug: "visited", sortOrder: 3 },
+    { name: "Test / Assessment", slug: "assessment", sortOrder: 4 },
+    { name: "Admitted", slug: "admitted", sortOrder: 5, isWon: true },
+    { name: "Lost", slug: "lost", sortOrder: 6, isLost: true },
+  ];
+  for (const s of stageDefs) {
+    await prisma.leadStage.upsert({
+      where: {
+        institutionId_slug: { institutionId: institution.id, slug: s.slug },
+      },
+      update: { name: s.name, sortOrder: s.sortOrder },
+      create: {
+        institutionId: institution.id,
+        name: s.name,
+        slug: s.slug,
+        sortOrder: s.sortOrder,
+        isWon: s.isWon ?? false,
+        isLost: s.isLost ?? false,
+      },
+    });
+  }
+
+  for (const src of [
+    { name: "WhatsApp", code: "whatsapp" },
+    { name: "Walk-in", code: "walkin" },
+    { name: "Website", code: "website" },
+    { name: "Referral", code: "referral" },
+  ]) {
+    await prisma.leadSource.upsert({
+      where: {
+        institutionId_code: { institutionId: institution.id, code: src.code },
+      },
+      update: { name: src.name },
+      create: { institutionId: institution.id, ...src },
+    });
+  }
+
+  const newStage = await prisma.leadStage.findFirst({
+    where: { institutionId: institution.id, slug: "new" },
+  });
+  const walkin = await prisma.leadSource.findFirst({
+    where: { institutionId: institution.id, code: "walkin" },
+  });
+  if (newStage) {
+    await prisma.lead.create({
+      data: {
+        institutionId: institution.id,
+        stageId: newStage.id,
+        sourceId: walkin?.id,
+        parentName: "Sana Malik",
+        phone: "+923009998887",
+        childName: "Zain Malik",
+        classSought: "Class 8",
+        firstMessage: "Class 8 ki fee kitni hai?",
+        status: "OPEN",
+      },
+    }).catch(() => null);
+  }
+
+  const { DEMO_KNOWLEDGE } = await import("@maxtrone/core");
+  for (const kb of DEMO_KNOWLEDGE) {
+    const existingKb = await prisma.knowledgeBaseEntry.findFirst({
+      where: { institutionId: institution.id, title: kb.title },
+    });
+    if (!existingKb) {
+      await prisma.knowledgeBaseEntry.create({
+        data: {
+          institutionId: institution.id,
+          category: kb.category,
+          title: kb.title,
+          body: kb.body,
+        },
+      });
+    }
+  }
+
+  const tuitionHead = await prisma.feeHead.upsert({
+    where: {
+      institutionId_name: { institutionId: institution.id, name: "Tuition" },
+    },
+    update: {},
+    create: {
+      institutionId: institution.id,
+      name: "Tuition",
+      kind: "TUITION",
+    },
+  });
+
+  const existingStructure = await prisma.feeStructure.findFirst({
+    where: { institutionId: institution.id, name: "Class 8 Tuition" },
+  });
+  if (!existingStructure) {
+    await prisma.feeStructure.create({
+      data: {
+        institutionId: institution.id,
+        feeHeadId: tuitionHead.id,
+        groupId: class8.id,
+        name: "Class 8 Tuition",
+        amountPaisa: 1_500_000,
+        frequency: "MONTHLY",
+      },
+    });
+  }
+
+  let ladder = await prisma.recoveryLadder.findUnique({
+    where: { institutionId: institution.id },
+  });
+  if (!ladder) {
+    ladder = await prisma.recoveryLadder.create({
+      data: { institutionId: institution.id, name: "Default" },
+    });
+    const { textOnlyLadder } = await import("@maxtrone/core");
+    const steps = textOnlyLadder();
+    await prisma.recoveryStep.createMany({
+      data: steps.map((s, i) => ({
+        institutionId: institution.id,
+        ladderId: ladder!.id,
+        dayOffset: s.dayOffset,
+        channel: s.channel,
+        templateBody: s.templateBody,
+        sortOrder: i,
+      })),
+    });
+  }
+
+  await prisma.whatsAppConnection.upsert({
+    where: { institutionId: institution.id },
+    update: { mode: "SANDBOX", displayNumber: "+923000000000" },
+    create: {
+      institutionId: institution.id,
+      mode: "SANDBOX",
+      displayNumber: "+923000000000",
+      connectedAt: new Date(),
+    },
+  });
+
+  await prisma.messageTemplate.upsert({
+    where: {
+      institutionId_name_language: {
+        institutionId: institution.id,
+        name: "fee_reminder",
+        language: "en",
+      },
+    },
+    update: {},
+    create: {
+      institutionId: institution.id,
+      name: "fee_reminder",
+      language: "en",
+      category: "UTILITY",
+      body: "Assalam o alaikum {{guardian_name}}. Fee reminder for {{student_name}}: {{amount_due}}. Pay: {{payment_link}}",
+      status: "APPROVED",
+    },
+  });
+
+  const seq = await prisma.sequence.findFirst({
+    where: { institutionId: institution.id, name: "Inquiry, no reply" },
+  });
+  if (!seq) {
+    const sequence = await prisma.sequence.create({
+      data: {
+        institutionId: institution.id,
+        name: "Inquiry, no reply",
+        description: "Follow up when inquiry goes cold",
+      },
+    });
+    await prisma.sequenceStep.createMany({
+      data: [
+        {
+          institutionId: institution.id,
+          sequenceId: sequence.id,
+          dayOffset: 1,
+          templateBody: "Hi {{parent_name}}, just checking if you had questions about admission?",
+          sortOrder: 0,
+        },
+        {
+          institutionId: institution.id,
+          sequenceId: sequence.id,
+          dayOffset: 3,
+          templateBody: "We still have seats in {{class_sought}}. Book a visit anytime.",
+          sortOrder: 1,
+        },
+      ],
+    });
+  }
+
   // Second institution for isolation tests / demos
   const rival = await prisma.institution.upsert({
     where: { slug: "bright-coaching" },
