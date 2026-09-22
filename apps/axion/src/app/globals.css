@@ -1,0 +1,195 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #07090d;
+  --bg-elevated: #0c1017;
+  --surface: #11161f;
+  --surface-hover: #161d28;
+  --border: rgba(232, 237, 245, 0.08);
+  --border-strong: rgba(232, 237, 245, 0.14);
+  --text: #e8edf5;
+  --text-muted: #8b95a8;
+  --text-dim: #5c6678;
+  --accent: #6eb8e0;
+  --accent-soft: rgba(110, 184, 224, 0.14);
+  --accent-strong: #8ecceb;
+  --accent-glow: rgba(110, 184, 224, 0.28);
+  --danger: #e07a6e;
+  --success: #6ec4a0;
+  --warning: #d4b06a;
+  --grid: rgba(232, 237, 245, 0.035);
+  --noise: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.55'/%3E%3C/svg%3E");
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-bg-elevated: var(--bg-elevated);
+  --color-surface: var(--surface);
+  --color-surface-hover: var(--surface-hover);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-text: var(--text);
+  --color-text-muted: var(--text-muted);
+  --color-text-dim: var(--text-dim);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-strong: var(--accent-strong);
+  --color-accent-glow: var(--accent-glow);
+  --color-danger: var(--danger);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --font-display: var(--font-display);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+  color-scheme: dark;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+}
+
+::selection {
+  background: var(--accent-soft);
+  color: var(--text);
+}
+
+.font-display {
+  font-family: var(--font-display), var(--font-sans), system-ui, sans-serif;
+  letter-spacing: -0.035em;
+}
+
+.font-mono {
+  font-family: var(--font-mono), ui-monospace, monospace;
+}
+
+.noise-overlay::before {
+  content: "";
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  opacity: 0.035;
+  background-image: var(--noise);
+  mix-blend-mode: overlay;
+  z-index: 1;
+}
+
+.grid-bg {
+  background-image:
+    linear-gradient(to right, var(--grid) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--grid) 1px, transparent 1px);
+  background-size: 64px 64px;
+}
+
+.radial-glow {
+  background: radial-gradient(
+    ellipse 60% 50% at 50% 20%,
+    var(--accent-glow),
+    transparent 70%
+  );
+}
+
+.section-pad {
+  padding-block: clamp(5rem, 12vw, 9rem);
+}
+
+.container-x {
+  width: min(1180px, calc(100% - 2.5rem));
+  margin-inline: auto;
+}
+
+@media (min-width: 768px) {
+  .container-x {
+    width: min(1180px, calc(100% - 4rem));
+  }
+}
+
+.eyebrow {
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.headline {
+  font-family: var(--font-display), sans-serif;
+  font-weight: 500;
+  letter-spacing: -0.04em;
+  line-height: 1.02;
+  text-wrap: balance;
+}
+
+.lede {
+  color: var(--text-muted);
+  font-size: 1.05rem;
+  line-height: 1.65;
+  max-width: 36rem;
+}
+
+.hairline {
+  border-color: var(--border);
+}
+
+@keyframes pulse-line {
+  0%,
+  100% {
+    opacity: 0.25;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes flow-dash {
+  to {
+    stroke-dashoffset: -24;
+  }
+}
+
+@keyframes float-y {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+.animate-flow {
+  stroke-dasharray: 6 10;
+  animation: flow-dash 1.2s linear infinite;
+}
+
+.animate-float {
+  animation: float-y 6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
