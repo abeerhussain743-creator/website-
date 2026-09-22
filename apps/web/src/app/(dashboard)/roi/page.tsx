@@ -32,6 +32,13 @@ export default async function RoiPage() {
             value={formatPkr(latest.headlinePaisa)}
             hint={(latest.summary as { headlineText?: string })?.headlineText}
           />
+          <div className="flex flex-wrap gap-2">
+            <Button asChild variant="outline">
+              <a href={`/api/reports/roi/${latest.period}`} target="_blank" rel="noreferrer">
+                Open branded PDF (print)
+              </a>
+            </Button>
+          </div>
           <pre className="overflow-auto rounded-[16px] border border-[var(--border)] bg-[var(--card)] p-4 text-xs">
             {JSON.stringify(latest.summary, null, 2)}
           </pre>

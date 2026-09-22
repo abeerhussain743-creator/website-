@@ -302,6 +302,7 @@ export async function uploadOmrScan(formData: FormData) {
   const { db, institution } = await requireTenantContext();
   const testId = String(formData.get("testId") || "");
   const imageUrl = String(formData.get("imageUrl") || `mock://upload/${Date.now()}.jpg`);
+  const forceReview = formData.get("forceReview") === "1";
   if (!testId) throw new Error("testId required");
 
   const scan = await db.oMRScan.create({
@@ -309,12 +310,17 @@ export async function uploadOmrScan(formData: FormData) {
       testId,
       imageUrl,
       status: "PENDING",
+      reviewNote: forceReview ? "force_review" : null,
     } as never,
   });
 
   await getQueues().academics.add(
     "omr-grade",
-    { institutionId: institution.id, scanId: scan.id },
+    {
+      institutionId: institution.id,
+      scanId: scan.id,
+      forceLowConfidence: forceReview,
+    },
     { jobId: `omr:${scan.id}`, attempts: 3 },
   );
 
@@ -322,6 +328,14 @@ export async function uploadOmrScan(formData: FormData) {
 }
 
 export async function reviewOmrScan(scanId: string, accept: boolean) {
+  await reviewOmrScanWithAnswers(scanId, accept, null);
+}
+
+export async function reviewOmrScanWithAnswers(
+  scanId: string,
+  accept: boolean,
+  answers: Array<{ questionNumber: number; option: string; confidence: number }> | null,
+) {
   const { db, institution, session } = await requireTenantContext();
   const scan = await db.oMRScan.findFirst({
     where: { id: scanId },
@@ -338,24 +352,40 @@ export async function reviewOmrScan(scanId: string, accept: boolean) {
     return;
   }
 
+  let score = scan.score ?? 0;
+  const finalAnswers = answers ?? (scan.rawAnswers as typeof answers) ?? [];
+  if (answers && scan.test.questions.length) {
+    score = 0;
+    for (const q of scan.test.questions) {
+      const ans = answers.find((a) => a.questionNumber === q.number);
+      if (ans && q.correctOption && ans.option.toUpperCase() === q.correctOption.toUpperCase()) {
+        score += q.marks;
+      }
+    }
+  }
+
   const student = await db.student.findFirst({ where: { status: "ACTIVE" } });
   await db.oMRScan.update({
     where: { id: scanId },
     data: {
       status: "ACCEPTED",
       studentId: student?.id ?? null,
+      score,
+      rawAnswers: finalAnswers,
+      confidence: 1,
+      reviewNote: "teacher_confirmed",
     },
   });
 
-  if (student && scan.score != null) {
+  if (student) {
     await prisma.mark.upsert({
       where: { testId_studentId: { testId: scan.testId, studentId: student.id } },
-      update: { score: scan.score },
+      update: { score },
       create: {
         institutionId: institution.id,
         testId: scan.testId,
         studentId: student.id,
-        score: scan.score,
+        score,
       },
     });
   }
@@ -366,6 +396,58 @@ export async function reviewOmrScan(scanId: string, accept: boolean) {
     action: "review",
     entityType: "OMRScan",
     entityId: scanId,
+  });
+
+  revalidatePath("/tests");
+}
+
+export async function generateReportCards(testId: string) {
+  const { db, institution, session } = await requireTenantContext();
+  const test = await db.test.findFirst({
+    where: { id: testId },
+    include: { marks: { include: { student: true } } },
+  });
+  if (!test) throw new Error("Test not found");
+
+  const termLabel = `${test.title} · ${new Date(test.testDate).toISOString().slice(0, 10)}`;
+  for (const mark of test.marks) {
+    const pdfUrl = `/api/reports/card/${mark.studentId}?term=${encodeURIComponent(termLabel)}`;
+    await prisma.reportCard.upsert({
+      where: { id: `rc-${mark.studentId}-${testId}` },
+      update: {
+        pdfUrl,
+        summary: {
+          testId,
+          score: mark.score,
+          total: test.totalMarks,
+          rank: mark.rank,
+          weakTopics: mark.weakTopics,
+        },
+      },
+      create: {
+        id: `rc-${mark.studentId}-${testId}`,
+        institutionId: institution.id,
+        studentId: mark.studentId,
+        termLabel,
+        pdfUrl,
+        summary: {
+          testId,
+          score: mark.score,
+          total: test.totalMarks,
+          rank: mark.rank,
+          weakTopics: mark.weakTopics,
+        },
+      },
+    });
+  }
+
+  await writeAudit({
+    institutionId: institution.id,
+    actorId: session.user.id,
+    action: "create",
+    entityType: "ReportCard",
+    entityId: testId,
+    metadata: { count: test.marks.length },
   });
 
   revalidatePath("/tests");
@@ -757,7 +839,7 @@ export async function issueParentMagicLink(guardianId: string) {
 
 export async function connectInstagramSandbox() {
   const { institution, session } = await requireTenantContext();
-  await prisma.instagramConnection.upsert({
+  const conn = await prisma.instagramConnection.upsert({
     where: { institutionId: institution.id },
     update: { connectedAt: new Date(), pageId: "sandbox-page" },
     create: {
@@ -766,6 +848,39 @@ export async function connectInstagramSandbox() {
       connectedAt: new Date(),
     },
   });
+
+  const existing = await prisma.instagramThread.findFirst({
+    where: { institutionId: institution.id, igUserId: "demo.parent.1" },
+  });
+  if (!existing) {
+    const thread = await prisma.instagramThread.create({
+      data: {
+        institutionId: institution.id,
+        connectionId: conn.id,
+        igUserId: "demo.parent.1",
+        displayName: "Sana Malik",
+        status: "OPEN",
+        lastMessageAt: new Date(),
+      },
+    });
+    await prisma.instagramMessage.createMany({
+      data: [
+        {
+          institutionId: institution.id,
+          threadId: thread.id,
+          direction: "INBOUND",
+          body: "Hi, what is the fee for Class 8?",
+        },
+        {
+          institutionId: institution.id,
+          threadId: thread.id,
+          direction: "OUTBOUND",
+          body: "Assalam o alaikum! Class 8 tuition is PKR 15,000/month. Would you like to book a visit?",
+          isAi: true,
+        },
+      ],
+    });
+  }
 
   await writeAudit({
     institutionId: institution.id,
@@ -776,6 +891,50 @@ export async function connectInstagramSandbox() {
   });
 
   revalidatePath("/settings");
+  revalidatePath("/instagram");
+}
+
+export async function replyInstagramDm(formData: FormData) {
+  const { db, institution } = await requireTenantContext();
+  const threadId = String(formData.get("threadId") || "");
+  const body = String(formData.get("body") || "").trim();
+  if (!threadId || !body) throw new Error("Missing fields");
+
+  await db.instagramMessage.create({
+    data: {
+      threadId,
+      direction: "OUTBOUND",
+      body,
+      isAi: false,
+    } as never,
+  });
+  await db.instagramThread.update({
+    where: { id: threadId },
+    data: { lastMessageAt: new Date() },
+  });
+
+  revalidatePath("/instagram");
+  void institution;
+}
+
+export async function seedInboundInstagramDm(formData: FormData) {
+  const { db } = await requireTenantContext();
+  const threadId = String(formData.get("threadId") || "");
+  const body = String(formData.get("body") || "Is school open tomorrow?").trim();
+  if (!threadId) throw new Error("thread required");
+
+  await db.instagramMessage.create({
+    data: {
+      threadId,
+      direction: "INBOUND",
+      body,
+    } as never,
+  });
+  await db.instagramThread.update({
+    where: { id: threadId },
+    data: { lastMessageAt: new Date() },
+  });
+  revalidatePath("/instagram");
 }
 
 // Keep gradeOmrMock imported for worker-side parity in tests / demos

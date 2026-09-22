@@ -19,6 +19,10 @@ import {
   transportEtaMessage,
   isMagicLinkValid,
   buildReferralCode,
+  buildRoiReportHtml,
+  buildReportCardHtml,
+  buildMinimalPdf,
+  parseMarksPaste,
 } from "@maxtrone/core";
 
 describe("phase 2 voice", () => {
@@ -192,5 +196,50 @@ describe("phase 3 surveys transport portal", () => {
         usedAt: null,
       }),
     ).toBe(true);
+  });
+});
+
+describe("phase 2/3 polish reports + paste", () => {
+  it("builds ROI HTML, report card HTML, minimal PDF, and paste parser", () => {
+    const html = buildRoiReportHtml({
+      institutionName: "Greenfield",
+      period: "2026-09",
+      headlinePaisa: 1_000_000,
+      headlineText: "Maxtrone helped you gain or save PKR 10,000 this month.",
+      inquiriesAnswered: 10,
+      avgFirstResponseMinutes: 3,
+      visitsBooked: 2,
+      admissionsWon: 1,
+      admissionsAnnualFeePaisa: 500_000,
+      feesRecoveredByAutomationPaisa: 200_000,
+      tutorIncomePaisa: 300_000,
+      messagesSent: 100,
+      readRatePct: 80,
+      atRiskStudentsSaved: 1,
+    });
+    expect(html).toContain("Greenfield");
+    expect(html).toContain("Monthly ROI");
+
+    const card = buildReportCardHtml({
+      institutionName: "Greenfield",
+      studentName: "Hassan",
+      termLabel: "Sep 2026",
+      subjects: [{ title: "Math", score: 8, total: 10, rank: 1, weakTopics: ["Algebra"] }],
+    });
+    expect(card).toContain("Hassan");
+    expect(card).toContain("Algebra");
+
+    const pdf = buildMinimalPdf(["Hello Maxtrone"]);
+    expect(pdf[0]).toBe(0x25); // %
+    expect(new TextDecoder().decode(pdf.slice(0, 5))).toBe("%PDF-");
+
+    const pasted = parseMarksPaste("Hassan\t9\nAli\t7", [
+      { id: "s1" },
+      { id: "s2" },
+    ]);
+    expect(pasted).toEqual([
+      { studentId: "s1", score: 9 },
+      { studentId: "s2", score: 7 },
+    ]);
   });
 });

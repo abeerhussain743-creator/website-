@@ -27,3 +27,4 @@ export * from "./tutor/monetization.js";
 export * from "./surveys/aggregate.js";
 export * from "./transport/eta.js";
 export * from "./portal/magic-link.js";
+export * from "./reports/pdf.js";

@@ -839,6 +839,8 @@ const academicsWorker = new Worker(
           correctOption: q.correctOption,
           marks: q.marks,
         })),
+        forceLowConfidence:
+          Boolean(job.data.forceLowConfidence) || scan.reviewNote === "force_review",
       });
       await db.oMRScan.update({
         where: { id: scan.id },
@@ -1081,11 +1083,13 @@ const intelligenceWorker = new Worker(
         }),
       });
 
+      const pdfUrl = `/api/reports/roi/${period}`;
       await prisma.monthlyReport.upsert({
         where: { institutionId_period: { institutionId, period } },
         update: {
           headlinePaisa: report.headlinePaisa,
           summary: report.summary,
+          pdfUrl,
           sentAt: new Date(),
         },
         create: {
@@ -1093,6 +1097,7 @@ const intelligenceWorker = new Worker(
           period,
           headlinePaisa: report.headlinePaisa,
           summary: report.summary,
+          pdfUrl,
           sentAt: new Date(),
         },
       });

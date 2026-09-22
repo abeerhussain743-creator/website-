@@ -39,6 +39,7 @@ const links = [
   { href: "/voice", label: "Voice", icon: Mic },
   { href: "/tutor", label: "AI Tutor", icon: Bot },
   { href: "/referrals", label: "Referrals", icon: Gift },
+  { href: "/instagram", label: "Instagram", icon: MessageSquare },
   { href: "/surveys", label: "Surveys", icon: ClipboardList },
   { href: "/competitors", label: "Competitors", icon: Radar },
   { href: "/transport", label: "Transport", icon: Bus },

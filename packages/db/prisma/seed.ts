@@ -686,6 +686,51 @@ async function main() {
     },
   });
 
+  const igConn = await prisma.instagramConnection.findUnique({
+    where: { institutionId: institution.id },
+  });
+  if (igConn) {
+    const thread = await prisma.instagramThread.upsert({
+      where: {
+        institutionId_igUserId: {
+          institutionId: institution.id,
+          igUserId: "demo.parent.1",
+        },
+      },
+      update: { lastMessageAt: new Date() },
+      create: {
+        institutionId: institution.id,
+        connectionId: igConn.id,
+        igUserId: "demo.parent.1",
+        displayName: "Sana Malik",
+        status: "OPEN",
+        lastMessageAt: new Date(),
+      },
+    });
+    const msgCount = await prisma.instagramMessage.count({
+      where: { threadId: thread.id },
+    });
+    if (msgCount === 0) {
+      await prisma.instagramMessage.createMany({
+        data: [
+          {
+            institutionId: institution.id,
+            threadId: thread.id,
+            direction: "INBOUND",
+            body: "Hi, what is the fee for Class 8?",
+          },
+          {
+            institutionId: institution.id,
+            threadId: thread.id,
+            direction: "OUTBOUND",
+            body: "Assalam o alaikum! Class 8 tuition is PKR 15,000/month.",
+            isAi: true,
+          },
+        ],
+      });
+    }
+  }
+
   await prisma.knowledgeBaseEntry.create({
     data: {
       institutionId: institution.id,

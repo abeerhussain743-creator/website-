@@ -72,6 +72,8 @@ export const TENANT_MODELS = [
   "riskScore",
   "monthlyReport",
   "instagramConnection",
+  "instagramThread",
+  "instagramMessage",
   "syllabusDocument",
   "syllabusChunk",
   "tutorEnrollment",

@@ -1,13 +1,15 @@
+import Link from "next/link";
 import { Button, EmptyState, Kpi } from "@maxtrone/ui";
 import { requireTenantContext } from "@/lib/tenant";
 import {
   createTest,
   generateOmrSheet,
+  generateReportCards,
   publishTestResults,
-  reviewOmrScan,
-  saveMarks,
   uploadOmrScan,
 } from "@/actions/phase23";
+import { MarksGrid } from "./marks-grid";
+import { OmrReviewCard } from "./omr-review";
 
 export default async function TestsPage() {
   const { db } = await requireTenantContext();
@@ -15,10 +17,18 @@ export default async function TestsPage() {
     db.test.findMany({
       where: { deletedAt: null },
       orderBy: { testDate: "desc" },
-      include: { marks: true, subject: true, questions: true },
+      include: {
+        marks: { include: { student: true } },
+        subject: true,
+        questions: true,
+      },
       take: 30,
     }),
-    db.student.findMany({ where: { status: "ACTIVE", deletedAt: null }, take: 100 }),
+    db.student.findMany({
+      where: { status: "ACTIVE", deletedAt: null },
+      orderBy: { fullName: "asc" },
+      take: 100,
+    }),
     db.group.findMany({ orderBy: { sortOrder: "asc" } }),
     db.oMRScan.findMany({
       where: { status: "NEEDS_REVIEW" },
@@ -34,17 +44,14 @@ export default async function TestsPage() {
       <div>
         <h1 className="font-display text-3xl font-semibold">Tests & OMR</h1>
         <p className="mt-1 text-sm text-[var(--muted-foreground)]">
-          Marks grid, publish to WhatsApp, phone-photo MCQ review
+          Spreadsheet marks grid · publish to WhatsApp · phone-photo MCQ review
         </p>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-3">
         <Kpi label="Tests" value={String(tests.length)} />
         <Kpi label="Needs OMR review" value={String(scans.length)} />
-        <Kpi
-          label="Latest published"
-          value={latest?.publishedAt ? "Yes" : "Draft"}
-        />
+        <Kpi label="Latest published" value={latest?.publishedAt ? "Yes" : "Draft"} />
       </div>
 
       <section className="space-y-3">
@@ -69,104 +76,97 @@ export default async function TestsPage() {
         <EmptyState title="No tests" description="Create a test to enter marks and generate OMR sheets." />
       ) : (
         <ul className="space-y-4">
-          {tests.map((t) => (
-            <li key={t.id} className="rounded-[16px] border border-[var(--border)] bg-[var(--card)] p-4">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <p className="font-medium">{t.title}</p>
-                  <p className="text-xs text-[var(--muted-foreground)]">
-                    {t.subject?.name ?? "General"} · {t.totalMarks} marks ·{" "}
-                    {new Date(t.testDate).toISOString().slice(0, 10)}
-                    {t.publishedAt ? " · published" : ""}
-                  </p>
+          {tests.map((t) => {
+            const markByStudent = new Map(t.marks.map((m) => [m.studentId, m]));
+            const gridRows = students.map((s) => {
+              const existing = markByStudent.get(s.id);
+              return {
+                id: s.id,
+                fullName: s.fullName,
+                score: existing?.score ?? 0,
+                weakTopics: (existing?.weakTopics ?? []).join(", "),
+              };
+            });
+            return (
+              <li key={t.id} className="rounded-[16px] border border-[var(--border)] bg-[var(--card)] p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="font-medium">{t.title}</p>
+                    <p className="text-xs text-[var(--muted-foreground)]">
+                      {t.subject?.name ?? "General"} · {t.totalMarks} marks ·{" "}
+                      {new Date(t.testDate).toISOString().slice(0, 10)}
+                      {t.publishedAt ? " · published" : ""}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <form action={generateOmrSheet.bind(null, t.id)}>
+                      <Button type="submit" variant="outline">OMR sheet</Button>
+                    </form>
+                    <form action={generateReportCards.bind(null, t.id)}>
+                      <Button type="submit" variant="outline">Report cards</Button>
+                    </form>
+                    <form action={publishTestResults.bind(null, t.id)}>
+                      <Button type="submit" variant="accent">Publish results</Button>
+                    </form>
+                  </div>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  <form action={generateOmrSheet.bind(null, t.id)}>
-                    <Button type="submit" variant="outline">OMR sheet</Button>
-                  </form>
-                  <form action={publishTestResults.bind(null, t.id)}>
-                    <Button type="submit" variant="accent">Publish results</Button>
-                  </form>
-                </div>
-              </div>
 
-              <form
-                action={saveMarks}
-                className="mt-4 space-y-2"
-              >
-                <input type="hidden" name="testId" value={t.id} />
-                <input
-                  type="hidden"
-                  name="marksJson"
-                  value={JSON.stringify(
-                    students.slice(0, 5).map((s, i) => ({
-                      studentId: s.id,
-                      score: Math.max(0, t.totalMarks - i),
-                      weakTopics: i > 0 ? ["Algebra"] : [],
-                    })),
-                  )}
-                />
-                <p className="text-xs text-[var(--muted-foreground)]">
-                  Demo: saves ranked marks for first {Math.min(5, students.length)} students
-                </p>
-                <Button type="submit" variant="outline">Save demo marks</Button>
-              </form>
+                <MarksGrid testId={t.id} totalMarks={t.totalMarks} initial={gridRows} />
 
-              {t.marks.length > 0 && (
-                <table className="mt-3 w-full text-left text-sm">
-                  <thead>
-                    <tr className="text-[var(--muted-foreground)]">
-                      <th className="py-1">Student</th>
-                      <th>Score</th>
-                      <th>Rank</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {t.marks.map((m) => (
-                      <tr key={m.id} className="border-t border-[var(--border)]">
-                        <td className="py-1">{m.studentId.slice(0, 8)}…</td>
-                        <td>{m.score}/{t.totalMarks}</td>
-                        <td>{m.rank ?? "—"}</td>
-                      </tr>
+                {t.marks.length > 0 && (
+                  <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                    {t.marks.slice(0, 3).map((m) => (
+                      <Link
+                        key={m.id}
+                        href={`/api/reports/card/${m.studentId}`}
+                        className="rounded-[8px] border border-[var(--border)] px-2 py-1 hover:bg-[var(--muted)]"
+                        target="_blank"
+                      >
+                        Card: {m.student.fullName}
+                      </Link>
                     ))}
-                  </tbody>
-                </table>
-              )}
+                  </div>
+                )}
 
-              <form action={uploadOmrScan} className="mt-3 flex flex-wrap gap-2">
-                <input type="hidden" name="testId" value={t.id} />
-                <input
-                  name="imageUrl"
-                  placeholder="mock://photo.jpg"
-                  defaultValue={`mock://omr-photo/${t.id}.jpg`}
-                  className="min-w-[200px] flex-1 rounded-[12px] border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm"
-                />
-                <Button type="submit" variant="outline">Queue OMR scan</Button>
-              </form>
-            </li>
-          ))}
+                <form action={uploadOmrScan} className="mt-3 flex flex-wrap gap-2">
+                  <input type="hidden" name="testId" value={t.id} />
+                  <input
+                    name="imageUrl"
+                    placeholder="mock://photo.jpg"
+                    defaultValue={`mock://omr-photo/${t.id}.jpg`}
+                    className="min-w-[200px] flex-1 rounded-[12px] border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm"
+                  />
+                  <label className="flex items-center gap-2 text-xs text-[var(--muted-foreground)]">
+                    <input type="checkbox" name="forceReview" value="1" />
+                    Force low-confidence review
+                  </label>
+                  <Button type="submit" variant="outline">Queue OMR scan</Button>
+                </form>
+              </li>
+            );
+          })}
         </ul>
       )}
 
       {scans.length > 0 && (
         <section className="space-y-3">
           <h2 className="font-display text-xl">OMR review</h2>
-          {scans.map((s) => (
-            <div key={s.id} className="flex flex-wrap items-center justify-between gap-2 rounded-[12px] border border-[var(--border)] bg-[var(--card)] p-3 text-sm">
-              <div>
-                <p>Confidence {Math.round(s.confidence * 100)}% · score {s.score ?? "—"}</p>
-                <p className="text-xs text-[var(--muted-foreground)]">{s.imageUrl}</p>
-              </div>
-              <div className="flex gap-2">
-                <form action={reviewOmrScan.bind(null, s.id, true)}>
-                  <Button type="submit">Accept</Button>
-                </form>
-                <form action={reviewOmrScan.bind(null, s.id, false)}>
-                  <Button type="submit" variant="outline">Reject</Button>
-                </form>
-              </div>
-            </div>
-          ))}
+          <p className="text-sm text-[var(--muted-foreground)]">
+            Fix uncertain bubbles, then accept — nothing low-confidence publishes automatically.
+          </p>
+          {scans.map((s) => {
+            const raw = (s.rawAnswers as Array<{ questionNumber: number; option: string; confidence: number }> | null) ?? [];
+            return (
+              <OmrReviewCard
+                key={s.id}
+                scanId={s.id}
+                imageUrl={s.imageUrl}
+                confidence={s.confidence}
+                score={s.score}
+                answers={raw}
+              />
+            );
+          })}
         </section>
       )}
     </div>

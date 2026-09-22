@@ -265,6 +265,8 @@ model Institution {
   competitorWatches    CompetitorWatch[]
   transportRoutes      TransportRoute[]
   parentMagicLinks     ParentMagicLink[]
+  instagramThreads     InstagramThread[]
+  instagramMessages    InstagramMessage[]
 
   @@index([status])
   @@index([planId])
@@ -1717,9 +1719,46 @@ model InstagramConnection {
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
 
-  institution Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  institution Institution       @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  threads     InstagramThread[]
 
   @@map("instagram_connections")
+}
+
+model InstagramThread {
+  id            String   @id @default(cuid())
+  institutionId String   @map("institution_id")
+  connectionId  String   @map("connection_id")
+  igUserId      String   @map("ig_user_id")
+  displayName   String   @map("display_name")
+  status        String   @default("OPEN")
+  lastMessageAt DateTime? @map("last_message_at")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  institution Institution         @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  connection  InstagramConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  messages    InstagramMessage[]
+
+  @@unique([institutionId, igUserId])
+  @@index([institutionId, lastMessageAt])
+  @@map("instagram_threads")
+}
+
+model InstagramMessage {
+  id            String   @id @default(cuid())
+  institutionId String   @map("institution_id")
+  threadId      String   @map("thread_id")
+  direction     MessageDirection
+  body          String
+  isAi          Boolean  @default(false) @map("is_ai")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  institution Institution     @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  thread      InstagramThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  @@index([institutionId, threadId, createdAt])
+  @@map("instagram_messages")
 }
 
 // ─── Phase 3: AI Tutor ───────────────────────────────────────────────────────
