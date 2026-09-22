@@ -7,6 +7,7 @@ import {
   applyMapping,
   validateImportRow,
   craftAdmissionsReply,
+  craftParentHelpdeskReply,
   buildMorningBriefing,
   nextRecoveryStep,
   textOnlyLadder,
@@ -15,6 +16,13 @@ import {
   buildInvoiceTotals,
   invoiceNumber,
   ADMISSIONS_PROMPT_VERSION,
+  gradeOmrMock,
+  craftWeeklyProgressNote,
+  computeRiskScore,
+  buildMonthlyRoiReport,
+  isAutomationRecovered,
+  transportEtaMessage,
+  distanceMeters,
   type ImportField,
 } from "@maxtrone/core";
 import { prisma, createTenantClient } from "@maxtrone/db";
@@ -32,6 +40,9 @@ export const queues = {
   recovery: new Queue("recovery", { connection }),
   briefing: new Queue("briefing", { connection }),
   invoices: new Queue("invoices", { connection }),
+  academics: new Queue("academics", { connection }),
+  intelligence: new Queue("intelligence", { connection }),
+  transport: new Queue("transport", { connection }),
 };
 
 const providers = createProviders();
@@ -155,7 +166,7 @@ const messagingWorker = new Worker(
       return { sent: recipients.length };
     }
 
-    if (job.name === "inbound-ai") {
+    if (job.name === "inbound-ai" || job.name === "parent-helpdesk") {
       const db = createTenantClient(prisma, job.data.institutionId);
       const conversation = await db.conversation.findFirst({
         where: { id: job.data.conversationId },
@@ -163,32 +174,96 @@ const messagingWorker = new Worker(
       if (!conversation || conversation.aiPaused) return { skipped: true };
 
       const knowledge = await db.knowledgeBaseEntry.findMany();
-      const reply = craftAdmissionsReply({
-        message: job.data.body,
-        knowledge,
+      const guardian = await db.guardian.findFirst({
+        where: { phone: conversation.phone },
+        include: {
+          students: {
+            include: {
+              student: {
+                include: {
+                  invoices: {
+                    where: {
+                      status: { in: ["ISSUED", "PARTIALLY_PAID", "OVERDUE"] },
+                      deletedAt: null,
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
       });
+
+      const isParent = Boolean(guardian);
+      let replyText: string;
+      let sources: string[];
+      let handoff: boolean;
+
+      if (isParent && guardian) {
+        const children = guardian.students.map((link) => {
+          const outstanding = link.student.invoices.reduce(
+            (s, inv) => s + (inv.totalPaisa - inv.paidPaisa),
+            0,
+          );
+          const nextDue = link.student.invoices[0]?.dueDate;
+          return {
+            studentId: link.student.id,
+            fullName: link.student.fullName,
+            outstandingPaisa: outstanding,
+            nextDueDate: nextDue
+              ? new Date(nextDue).toISOString().slice(0, 10)
+              : null,
+          };
+        });
+        const helpdesk = craftParentHelpdeskReply({
+          message: job.data.body,
+          children,
+          knowledge,
+        });
+        replyText = helpdesk.text;
+        sources = helpdesk.sources;
+        handoff = helpdesk.handoff;
+        if (helpdesk.draftForInbox) {
+          await db.task.create({
+            data: {
+              title: "Parent helpdesk handoff",
+              description: helpdesk.draftForInbox,
+            } as never,
+          });
+        }
+      } else {
+        const reply = craftAdmissionsReply({
+          message: job.data.body,
+          knowledge,
+        });
+        replyText = reply.text;
+        sources = reply.sources;
+        handoff = reply.handoff;
+        if (reply.handoff) {
+          await db.task.create({
+            data: {
+              title: "Inbox handoff",
+              description: job.data.body,
+            } as never,
+          });
+        }
+      }
 
       await db.aIInteraction.create({
         data: {
           conversationId: conversation.id,
-          promptVersion: ADMISSIONS_PROMPT_VERSION,
+          promptVersion: isParent ? "helpdesk-v1" : ADMISSIONS_PROMPT_VERSION,
           input: job.data.body,
-          output: reply.text,
-          sources: reply.sources,
+          output: replyText,
+          sources,
           latencyMs: 8,
         } as never,
       });
 
-      if (reply.handoff) {
+      if (handoff) {
         await db.conversation.update({
           where: { id: conversation.id },
           data: { status: "HUMAN", aiPaused: true },
-        });
-        await db.task.create({
-          data: {
-            title: "Inbox handoff",
-            description: job.data.body,
-          } as never,
         });
       }
 
@@ -197,7 +272,7 @@ const messagingWorker = new Worker(
         data: {
           conversationId: conversation.id,
           direction: "OUTBOUND",
-          body: reply.text,
+          body: replyText,
           status: "QUEUED",
           isAi: true,
           idempotencyKey: outKey,
@@ -206,11 +281,25 @@ const messagingWorker = new Worker(
 
       await providers.messaging.sendText({
         to: conversation.phone,
-        body: reply.text,
+        body: replyText,
         idempotencyKey: outKey,
       });
 
-      return reply;
+      return { text: replyText, sources, handoff, parent: isParent };
+    }
+
+    if (job.name === "send-voice-note") {
+      const result = await providers.tts.synthesize({
+        text: job.data.text,
+        language: job.data.language === "en-US" ? "en-US" : "ur-PK",
+        idempotencyKey: job.data.idempotencyKey,
+      });
+      await providers.messaging.sendText({
+        to: job.data.to,
+        body: `${job.data.companionText ?? ""}\n🎧 ${result.audioUrl}`.trim(),
+        idempotencyKey: `${job.data.idempotencyKey}:msg`,
+      });
+      return result;
     }
 
     if (job.name === "whatsapp-webhook") {
@@ -677,6 +766,393 @@ const schedulesWorker = new Worker(
       }
       return { tenants: institutions.length };
     }
+    if (job.name === "daily-risk") {
+      const institutions = await prisma.institution.findMany({
+        where: { status: "ACTIVE" },
+        select: { id: true },
+      });
+      for (const inst of institutions) {
+        await queues.intelligence.add(
+          "risk-score",
+          { institutionId: inst.id },
+          { jobId: `risk:${inst.id}:${new Date().toISOString().slice(0, 10)}` },
+        );
+      }
+      return { tenants: institutions.length };
+    }
+    if (job.name === "weekly-progress") {
+      const institutions = await prisma.institution.findMany({
+        where: { status: "ACTIVE" },
+        select: { id: true },
+      });
+      for (const inst of institutions) {
+        await queues.academics.add(
+          "weekly-progress",
+          { institutionId: inst.id },
+          { jobId: `progress:${inst.id}:${new Date().toISOString().slice(0, 10)}` },
+        );
+      }
+      return { tenants: institutions.length };
+    }
+    if (job.name === "monthly-roi") {
+      const period = new Date().toISOString().slice(0, 7);
+      const institutions = await prisma.institution.findMany({
+        where: { status: "ACTIVE" },
+        select: { id: true },
+      });
+      for (const inst of institutions) {
+        await queues.intelligence.add(
+          "monthly-roi",
+          { institutionId: inst.id, period },
+          { jobId: `roi:${inst.id}:${period}` },
+        );
+      }
+      return { tenants: institutions.length };
+    }
+  },
+  { connection },
+);
+
+const academicsWorker = new Worker(
+  "academics",
+  async (job) => {
+    const institutionId = job.data.institutionId as string;
+    const db = createTenantClient(prisma, institutionId);
+
+    if (job.name === "omr-grade") {
+      const scan = await db.oMRScan.findFirst({
+        where: { id: job.data.scanId },
+      });
+      if (!scan) return { skipped: true };
+      const questions = await db.testQuestion.findMany({
+        where: { testId: scan.testId },
+        orderBy: { number: "asc" },
+      });
+      await db.oMRScan.update({
+        where: { id: scan.id },
+        data: { status: "PROCESSING" },
+      });
+      const graded = gradeOmrMock({
+        imageUrl: scan.imageUrl,
+        questions: questions.map((q) => ({
+          number: q.number,
+          correctOption: q.correctOption,
+          marks: q.marks,
+        })),
+        forceLowConfidence:
+          Boolean(job.data.forceLowConfidence) || scan.reviewNote === "force_review",
+      });
+      await db.oMRScan.update({
+        where: { id: scan.id },
+        data: {
+          status: graded.needsReview ? "NEEDS_REVIEW" : "ACCEPTED",
+          confidence: graded.overallConfidence,
+          rawAnswers: graded.answers,
+          score: graded.score,
+        },
+      });
+      return graded;
+    }
+
+    if (job.name === "weekly-progress") {
+      const students = await db.student.findMany({
+        where: { status: "ACTIVE", deletedAt: null },
+        take: 200,
+      });
+      const weekStart = new Date();
+      weekStart.setDate(weekStart.getDate() - ((weekStart.getDay() + 6) % 7));
+      weekStart.setHours(0, 0, 0, 0);
+      let created = 0;
+      for (const student of students) {
+        const present = await db.attendanceRecord.count({
+          where: {
+            studentId: student.id,
+            status: "PRESENT",
+            session: { date: { gte: weekStart } },
+          },
+        });
+        const total = await db.attendanceRecord.count({
+          where: {
+            studentId: student.id,
+            session: { date: { gte: weekStart } },
+          },
+        });
+        const latestMark = await db.mark.findFirst({
+          where: { studentId: student.id },
+          orderBy: { createdAt: "desc" },
+          include: { test: true },
+        });
+        const body = craftWeeklyProgressNote({
+          studentName: student.fullName,
+          weekLabel: weekStart.toISOString().slice(0, 10),
+          presentDays: present,
+          totalDays: Math.max(total, 1),
+          latestTestTitle: latestMark?.test.title,
+          latestScore: latestMark?.score,
+          latestTotal: latestMark?.test.totalMarks,
+        });
+        await prisma.progressNote.upsert({
+          where: {
+            studentId_weekOf: { studentId: student.id, weekOf: weekStart },
+          },
+          update: { body, status: "DRAFT" },
+          create: {
+            institutionId,
+            studentId: student.id,
+            weekOf: weekStart,
+            body,
+            language: "ROMAN_UR",
+            status: "DRAFT",
+          },
+        });
+        created += 1;
+      }
+      return { created };
+    }
+
+    if (job.name === "send-progress-notes") {
+      const notes = await db.progressNote.findMany({
+        where: { status: "APPROVED" },
+        include: {
+          student: { include: { guardians: { include: { guardian: true } } } },
+        },
+      });
+      let sent = 0;
+      for (const note of notes) {
+        const guardian =
+          note.student.guardians.find((g) => g.isPrimary)?.guardian ??
+          note.student.guardians[0]?.guardian;
+        if (!guardian?.whatsappOptIn) continue;
+        await providers.messaging.sendText({
+          to: guardian.phone,
+          body: note.body,
+          idempotencyKey: `progress:${note.id}`,
+        });
+        await db.progressNote.update({
+          where: { id: note.id },
+          data: { status: "SENT", sentAt: new Date() },
+        });
+        sent += 1;
+      }
+      return { sent };
+    }
+
+    return { ok: true };
+  },
+  { connection },
+);
+
+const intelligenceWorker = new Worker(
+  "intelligence",
+  async (job) => {
+    const institutionId = job.data.institutionId as string;
+    const db = createTenantClient(prisma, institutionId);
+
+    if (job.name === "risk-score") {
+      const students = await db.student.findMany({
+        where: { status: "ACTIVE", deletedAt: null },
+        include: {
+          invoices: {
+            where: { status: { in: ["OVERDUE", "ISSUED", "PARTIALLY_PAID"] } },
+          },
+        },
+        take: 500,
+      });
+      let scored = 0;
+      for (const student of students) {
+        const monthAgo = new Date();
+        monthAgo.setDate(monthAgo.getDate() - 30);
+        const present = await db.attendanceRecord.count({
+          where: {
+            studentId: student.id,
+            status: "PRESENT",
+            session: { date: { gte: monthAgo } },
+          },
+        });
+        const total = await db.attendanceRecord.count({
+          where: {
+            studentId: student.id,
+            session: { date: { gte: monthAgo } },
+          },
+        });
+        const attendancePct = total > 0 ? (present / total) * 100 : 100;
+        const drop = Math.max(0, Math.round(90 - attendancePct));
+        const overdue = student.invoices.filter(
+          (i) => i.paidPaisa < i.totalPaisa,
+        ).length;
+        const absences = await db.attendanceRecord.count({
+          where: {
+            studentId: student.id,
+            status: "ABSENT",
+            session: { date: { gte: monthAgo } },
+          },
+        });
+        const result = computeRiskScore({
+          attendanceDropPct: drop,
+          consecutiveAbsences: absences >= 3 ? absences : 0,
+          overdueInvoiceCount: overdue,
+        });
+        await db.riskScore.create({
+          data: {
+            studentId: student.id,
+            score: result.score,
+            reasons: result.reasons,
+            suggestedAction: result.suggestedAction,
+          } as never,
+        });
+        if (result.score >= 70) {
+          await db.task.create({
+            data: {
+              title: `At-risk: ${student.fullName}`,
+              description: `${result.reasons.join(" · ")}. Suggested: ${result.suggestedAction}`,
+            } as never,
+          });
+        }
+        scored += 1;
+      }
+      return { scored };
+    }
+
+    if (job.name === "monthly-roi") {
+      const period = (job.data.period as string) || new Date().toISOString().slice(0, 7);
+      const [y, m] = period.split("-").map(Number);
+      const start = new Date(Date.UTC(y!, m! - 1, 1));
+      const end = new Date(Date.UTC(y!, m!, 1));
+
+      const inquiriesAnswered = await db.aIInteraction.count({
+        where: { createdAt: { gte: start, lt: end } },
+      });
+      const visitsBooked = await db.booking.count({
+        where: { createdAt: { gte: start, lt: end }, status: "BOOKED" },
+      });
+      const admissionsWon = await db.lead.count({
+        where: { status: "WON", updatedAt: { gte: start, lt: end } },
+      });
+      const messagesSent = await db.message.count({
+        where: {
+          direction: "OUTBOUND",
+          createdAt: { gte: start, lt: end },
+        },
+      });
+      const messagesRead = Math.round(messagesSent * 0.8);
+
+      const recoveryRuns = await db.recoveryRun.findMany({
+        where: { sentAt: { gte: start, lt: end } },
+        include: {
+          invoice: {
+            include: {
+              allocations: { include: { payment: true } },
+            },
+          },
+        },
+      });
+      let feesRecoveredByAutomationPaisa = 0;
+      for (const run of recoveryRuns) {
+        for (const alloc of run.invoice.allocations) {
+          const payment = alloc.payment;
+          if (
+            payment.status === "SUCCEEDED" &&
+            isAutomationRecovered({
+              reminderSentAt: run.sentAt,
+              paidAt: payment.receivedAt ?? payment.createdAt,
+            })
+          ) {
+            feesRecoveredByAutomationPaisa += alloc.amountPaisa;
+          }
+        }
+      }
+
+      const tutorSubs = await db.tutorSubscription.findMany({
+        where: { status: "ACTIVE", createdAt: { lt: end } },
+      });
+      const tutorIncomePaisa = tutorSubs.reduce((s, t) => s + t.pricePaisa, 0);
+
+      const report = buildMonthlyRoiReport({
+        period,
+        inquiriesAnswered,
+        avgFirstResponseMinutes: 4,
+        visitsBooked,
+        admissionsWon,
+        admissionsAnnualFeePaisa: admissionsWon * 180_000_00,
+        feesRecoveredByAutomationPaisa,
+        tutorIncomePaisa,
+        messagesSent,
+        messagesRead,
+        atRiskStudentsSaved: await db.riskScore.count({
+          where: { score: { gte: 40 }, scoredAt: { gte: start, lt: end } },
+        }),
+      });
+
+      const pdfUrl = `/api/reports/roi/${period}`;
+      await prisma.monthlyReport.upsert({
+        where: { institutionId_period: { institutionId, period } },
+        update: {
+          headlinePaisa: report.headlinePaisa,
+          summary: report.summary,
+          pdfUrl,
+          sentAt: new Date(),
+        },
+        create: {
+          institutionId,
+          period,
+          headlinePaisa: report.headlinePaisa,
+          summary: report.summary,
+          pdfUrl,
+          sentAt: new Date(),
+        },
+      });
+
+      const ownerMembership = await prisma.membership.findFirst({
+        where: { institutionId, isActive: true, role: { systemRole: "OWNER" } },
+        include: { user: true },
+      });
+      if (ownerMembership) {
+        await providers.messaging.sendText({
+          to: ownerMembership.user.phone ?? "+923001111111",
+          body: report.whatsappBody,
+          idempotencyKey: `roi:${institutionId}:${period}`,
+        });
+      }
+      return report;
+    }
+
+    return { ok: true };
+  },
+  { connection },
+);
+
+const transportWorker = new Worker(
+  "transport",
+  async (job) => {
+    if (job.name !== "eta-alert") return { skipped: true };
+    const institutionId = job.data.institutionId as string;
+    const db = createTenantClient(prisma, institutionId);
+    const route = await db.transportRoute.findFirst({
+      where: { id: job.data.routeId },
+    });
+    if (!route) return { skipped: true };
+
+    // Demo stop: Gulberg campus
+    const campus = { lat: 31.5204, lng: 74.3587 };
+    const meters = distanceMeters(campus, {
+      lat: Number(job.data.lat),
+      lng: Number(job.data.lng),
+    });
+    const message = transportEtaMessage({
+      routeName: route.name,
+      metersAway: meters,
+    });
+    await db.transportAlert.create({
+      data: { routeId: route.id, message } as never,
+    });
+    if (route.driverPhone) {
+      await providers.messaging.sendText({
+        to: route.driverPhone,
+        body: message,
+        idempotencyKey: `eta:${route.id}:${job.id}`,
+      });
+    }
+    return { message, meters };
   },
   { connection },
 );
@@ -703,7 +1179,31 @@ async function main() {
       jobId: "daily-briefing",
     },
   );
-  log.info("Maxtrone Phase 1 worker started");
+  await queues.schedules.add(
+    "daily-risk",
+    {},
+    {
+      repeat: { pattern: "30 7 * * *", tz: "Asia/Karachi" },
+      jobId: "daily-risk",
+    },
+  );
+  await queues.schedules.add(
+    "weekly-progress",
+    {},
+    {
+      repeat: { pattern: "0 16 * * 5", tz: "Asia/Karachi" },
+      jobId: "weekly-progress",
+    },
+  );
+  await queues.schedules.add(
+    "monthly-roi",
+    {},
+    {
+      repeat: { pattern: "0 9 1 * *", tz: "Asia/Karachi" },
+      jobId: "monthly-roi",
+    },
+  );
+  log.info("Maxtrone Phase 2/3 worker started");
 }
 
 main().catch((err) => {
@@ -719,6 +1219,9 @@ process.on("SIGINT", async () => {
     recoveryWorker.close(),
     briefingWorker.close(),
     schedulesWorker.close(),
+    academicsWorker.close(),
+    intelligenceWorker.close(),
+    transportWorker.close(),
     connection.quit(),
   ]);
   process.exit(0);

@@ -21,6 +21,8 @@ export default async function DashboardPage() {
     invoices,
     payments,
     setupComplete,
+    highRisk,
+    tutorIncome,
   ] = await Promise.all([
     db.student.count({ where: { status: "ACTIVE", deletedAt: null } }),
     db.guardian.count({ where: { deletedAt: null } }),
@@ -35,6 +37,10 @@ export default async function DashboardPage() {
       take: 500,
     }),
     Promise.resolve(institution.onboardingStep === "complete"),
+    db.riskScore.count({ where: { score: { gte: 70 } } }),
+    db.tutorSubscription.findMany({ where: { status: "ACTIVE" } }).then((rows) =>
+      rows.reduce((s, r) => s + r.pricePaisa, 0),
+    ),
   ]);
 
   const collected = payments.reduce((s, p) => s + p.amountPaisa, 0);
@@ -93,6 +99,19 @@ export default async function DashboardPage() {
         <Link href="/fees">
           <Kpi label="Outstanding" value={formatPkr(outstanding)} hint={`${recoveryRuns} recovery touches`} />
         </Link>
+        <Link href="/risk">
+          <Kpi label="High-risk students" value={String(highRisk)} hint="Withdrawal early-warning" />
+        </Link>
+        <Link href="/tutor">
+          <Kpi
+            label="Tutor income (MRR)"
+            value={formatPkr(tutorIncome)}
+            hint={hasFeature(entitlements, "ai_tutor") ? "Active subscriptions" : "Locked on plan"}
+          />
+        </Link>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-2">
         <Link href="/admissions">
           <Kpi label="Open inquiries" value={String(leadCount)} />
         </Link>

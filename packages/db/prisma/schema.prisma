@@ -247,6 +247,27 @@ model Institution {
   invites              InstitutionInvite[]
   whatsappConnection   WhatsAppConnection?
 
+  // Phase 2 / 3
+  voiceNotes           VoiceNote[]
+  voiceCalls           VoiceCall[]
+  subjects             Subject[]
+  tests                Test[]
+  reportCards          ReportCard[]
+  progressNotes        ProgressNote[]
+  riskScores           RiskScore[]
+  monthlyReports       MonthlyReport[]
+  instagramConnection  InstagramConnection?
+  syllabusDocuments    SyllabusDocument[]
+  tutorEnrollments     TutorEnrollment[]
+  revenueShareLedgers  RevenueShareLedger[]
+  safeguardingAlerts   SafeguardingAlert[]
+  surveys              Survey[]
+  competitorWatches    CompetitorWatch[]
+  transportRoutes      TransportRoute[]
+  parentMagicLinks     ParentMagicLink[]
+  instagramThreads     InstagramThread[]
+  instagramMessages    InstagramMessage[]
+
   @@index([status])
   @@index([planId])
   @@map("institutions")
@@ -414,6 +435,11 @@ model Student {
   installmentPlans InstallmentPlan[]
   invoices         Invoice[]
   payments         Payment[]
+  marks            Mark[]
+  reportCards      ReportCard[]
+  progressNotes    ProgressNote[]
+  riskScores       RiskScore[]
+  tutorEnrollments TutorEnrollment[]
 
   @@unique([institutionId, registrationNo])
   @@index([institutionId, status])
@@ -1424,4 +1450,562 @@ model WhatsAppConnection {
   institution Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
 
   @@map("whatsapp_connections")
+}
+
+// ─── Phase 2 / 3 enums ───────────────────────────────────────────────────────
+
+enum VoiceCallPurpose {
+  FEE_REMINDER
+  ABSENCE_CONFIRM
+  EVENT_REMINDER
+  OTHER
+}
+
+enum OMRScanStatus {
+  PENDING
+  PROCESSING
+  NEEDS_REVIEW
+  ACCEPTED
+  REJECTED
+}
+
+enum ProgressNoteStatus {
+  DRAFT
+  APPROVED
+  SENT
+}
+
+enum TutorSubStatus {
+  TRIAL
+  ACTIVE
+  PAST_DUE
+  CANCELLED
+}
+
+enum SafeguardingSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+// ─── Phase 2: Voice ──────────────────────────────────────────────────────────
+
+model VoiceNote {
+  id            String   @id @default(cuid())
+  institutionId String   @map("institution_id")
+  textHash      String   @map("text_hash")
+  text          String
+  language      String   @default("ur-PK")
+  audioUrl      String   @map("audio_url")
+  characters    Int      @default(0)
+  durationMs    Int      @default(0) @map("duration_ms")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  institution Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+
+  @@unique([institutionId, textHash, language])
+  @@index([institutionId])
+  @@map("voice_notes")
+}
+
+model VoiceCall {
+  id            String           @id @default(cuid())
+  institutionId String           @map("institution_id")
+  guardianId    String?          @map("guardian_id")
+  phone         String
+  purpose       VoiceCallPurpose @default(FEE_REMINDER)
+  outcome       String?
+  promisedDate  DateTime?        @map("promised_date") @db.Date
+  transcript    String?
+  recordingUrl  String?          @map("recording_url")
+  providerCallId String?         @map("provider_call_id")
+  idempotencyKey String          @map("idempotency_key")
+  createdAt     DateTime         @default(now()) @map("created_at")
+  updatedAt     DateTime         @updatedAt @map("updated_at")
+
+  institution Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+
+  @@unique([institutionId, idempotencyKey])
+  @@index([institutionId, phone, createdAt])
+  @@map("voice_calls")
+}
+
+// ─── Phase 2: Academics ──────────────────────────────────────────────────────
+
+model Subject {
+  id            String   @id @default(cuid())
+  institutionId String   @map("institution_id")
+  name          String
+  code          String?
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  institution Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  tests       Test[]
+
+  @@unique([institutionId, name])
+  @@map("subjects")
+}
+
+model Test {
+  id            String    @id @default(cuid())
+  institutionId String    @map("institution_id")
+  subjectId     String?   @map("subject_id")
+  groupId       String?   @map("group_id")
+  title         String
+  totalMarks    Int       @map("total_marks")
+  testDate      DateTime  @map("test_date") @db.Date
+  publishedAt   DateTime? @map("published_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+  deletedAt     DateTime? @map("deleted_at")
+
+  institution Institution     @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  subject     Subject?        @relation(fields: [subjectId], references: [id])
+  questions   TestQuestion[]
+  marks       Mark[]
+  omrSheets   OMRSheet[]
+  omrScans    OMRScan[]
+
+  @@index([institutionId, testDate])
+  @@map("tests")
+}
+
+model TestQuestion {
+  id            String @id @default(cuid())
+  institutionId String @map("institution_id")
+  testId        String @map("test_id")
+  number        Int
+  topic         String?
+  marks         Int    @default(1)
+  correctOption String? @map("correct_option")
+
+  test Test @relation(fields: [testId], references: [id], onDelete: Cascade)
+
+  @@unique([testId, number])
+  @@index([institutionId])
+  @@map("test_questions")
+}
+
+model Mark {
+  id            String   @id @default(cuid())
+  institutionId String   @map("institution_id")
+  testId        String   @map("test_id")
+  studentId     String   @map("student_id")
+  score         Int
+  rank          Int?
+  weakTopics    String[] @default([]) @map("weak_topics")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  test    Test    @relation(fields: [testId], references: [id], onDelete: Cascade)
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([testId, studentId])
+  @@index([institutionId, studentId])
+  @@map("marks")
+}
+
+model OMRSheet {
+  id            String   @id @default(cuid())
+  institutionId String   @map("institution_id")
+  testId        String   @map("test_id")
+  qrPayload     String   @map("qr_payload")
+  pdfUrl        String?  @map("pdf_url")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  test Test @relation(fields: [testId], references: [id], onDelete: Cascade)
+
+  @@index([institutionId, testId])
+  @@map("omr_sheets")
+}
+
+model OMRScan {
+  id            String        @id @default(cuid())
+  institutionId String        @map("institution_id")
+  testId        String        @map("test_id")
+  studentId     String?       @map("student_id")
+  imageUrl      String        @map("image_url")
+  status        OMRScanStatus @default(PENDING)
+  confidence    Float         @default(0)
+  rawAnswers    Json?
+  score         Int?
+  reviewNote    String?       @map("review_note")
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+
+  test Test @relation(fields: [testId], references: [id], onDelete: Cascade)
+
+  @@index([institutionId, status])
+  @@map("omr_scans")
+}
+
+model ReportCard {
+  id            String   @id @default(cuid())
+  institutionId String   @map("institution_id")
+  studentId     String   @map("student_id")
+  termLabel     String   @map("term_label")
+  pdfUrl        String?  @map("pdf_url")
+  summary       Json?
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  institution Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  student     Student     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([institutionId, studentId])
+  @@map("report_cards")
+}
+
+model ProgressNote {
+  id            String             @id @default(cuid())
+  institutionId String             @map("institution_id")
+  studentId     String             @map("student_id")
+  weekOf        DateTime           @map("week_of") @db.Date
+  body          String
+  language      String             @default("ROMAN_UR")
+  status        ProgressNoteStatus @default(DRAFT)
+  sentAt        DateTime?          @map("sent_at")
+  createdAt     DateTime           @default(now()) @map("created_at")
+  updatedAt     DateTime           @updatedAt @map("updated_at")
+
+  institution Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  student     Student     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, weekOf])
+  @@index([institutionId, status])
+  @@map("progress_notes")
+}
+
+model RiskScore {
+  id            String   @id @default(cuid())
+  institutionId String   @map("institution_id")
+  studentId     String   @map("student_id")
+  score         Int
+  reasons       String[]
+  suggestedAction String? @map("suggested_action")
+  scoredAt      DateTime @default(now()) @map("scored_at")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  institution Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  student     Student     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([institutionId, score])
+  @@index([studentId, scoredAt])
+  @@map("risk_scores")
+}
+
+model MonthlyReport {
+  id            String   @id @default(cuid())
+  institutionId String   @map("institution_id")
+  period        String
+  headlinePaisa Int      @map("headline_paisa")
+  summary       Json
+  pdfUrl        String?  @map("pdf_url")
+  sentAt        DateTime? @map("sent_at")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  institution Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+
+  @@unique([institutionId, period])
+  @@map("monthly_reports")
+}
+
+model InstagramConnection {
+  id            String   @id @default(cuid())
+  institutionId String   @unique @map("institution_id")
+  pageId        String?  @map("page_id")
+  connectedAt   DateTime? @map("connected_at")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  institution Institution       @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  threads     InstagramThread[]
+
+  @@map("instagram_connections")
+}
+
+model InstagramThread {
+  id            String   @id @default(cuid())
+  institutionId String   @map("institution_id")
+  connectionId  String   @map("connection_id")
+  igUserId      String   @map("ig_user_id")
+  displayName   String   @map("display_name")
+  status        String   @default("OPEN")
+  lastMessageAt DateTime? @map("last_message_at")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  institution Institution         @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  connection  InstagramConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  messages    InstagramMessage[]
+
+  @@unique([institutionId, igUserId])
+  @@index([institutionId, lastMessageAt])
+  @@map("instagram_threads")
+}
+
+model InstagramMessage {
+  id            String   @id @default(cuid())
+  institutionId String   @map("institution_id")
+  threadId      String   @map("thread_id")
+  direction     MessageDirection
+  body          String
+  isAi          Boolean  @default(false) @map("is_ai")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  institution Institution     @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  thread      InstagramThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  @@index([institutionId, threadId, createdAt])
+  @@map("instagram_messages")
+}
+
+// ─── Phase 3: AI Tutor ───────────────────────────────────────────────────────
+
+model SyllabusDocument {
+  id            String   @id @default(cuid())
+  institutionId String   @map("institution_id")
+  title         String
+  board         String?
+  grade         String?
+  subject       String?
+  sourceUrl     String?  @map("source_url")
+  status        String   @default("PENDING")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  institution Institution     @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  chunks      SyllabusChunk[]
+
+  @@index([institutionId, board, grade])
+  @@map("syllabus_documents")
+}
+
+model SyllabusChunk {
+  id            String   @id @default(cuid())
+  institutionId String   @map("institution_id")
+  documentId    String   @map("document_id")
+  chapter       String?
+  topic         String?
+  page          Int?
+  content       String
+  // Embedding stored as float array JSON for Phase 3 mock; pgvector later
+  embedding     Json?
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  document SyllabusDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([institutionId, documentId])
+  @@map("syllabus_chunks")
+}
+
+model TutorEnrollment {
+  id            String   @id @default(cuid())
+  institutionId String   @map("institution_id")
+  studentId     String   @map("student_id")
+  parentConsentAt DateTime? @map("parent_consent_at")
+  dailyCap      Int      @default(40) @map("daily_cap")
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  institution   Institution        @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  student       Student            @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  subscriptions TutorSubscription[]
+  sessions      TutorSession[]
+
+  @@unique([institutionId, studentId])
+  @@map("tutor_enrollments")
+}
+
+model TutorSubscription {
+  id            String         @id @default(cuid())
+  institutionId String         @map("institution_id")
+  enrollmentId  String         @map("enrollment_id")
+  pricePaisa    Int            @map("price_paisa")
+  status        TutorSubStatus @default(ACTIVE)
+  startedAt     DateTime       @default(now()) @map("started_at")
+  endsAt        DateTime?      @map("ends_at")
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
+
+  enrollment TutorEnrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+
+  @@index([institutionId, status])
+  @@map("tutor_subscriptions")
+}
+
+model TutorSession {
+  id            String   @id @default(cuid())
+  institutionId String   @map("institution_id")
+  enrollmentId  String   @map("enrollment_id")
+  startedAt     DateTime @default(now()) @map("started_at")
+  endedAt       DateTime? @map("ended_at")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  enrollment TutorEnrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  messages   TutorMessage[]
+
+  @@index([institutionId, enrollmentId])
+  @@map("tutor_sessions")
+}
+
+model TutorMessage {
+  id            String   @id @default(cuid())
+  institutionId String   @map("institution_id")
+  sessionId     String   @map("session_id")
+  role          String
+  content       String
+  citedChunkIds String[] @default([]) @map("cited_chunk_ids")
+  moderated     Boolean  @default(false)
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  session TutorSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([institutionId, sessionId])
+  @@map("tutor_messages")
+}
+
+model RevenueShareLedger {
+  id               String   @id @default(cuid())
+  institutionId    String   @map("institution_id")
+  period           String
+  grossPaisa       Int      @map("gross_paisa")
+  platformSharePaisa Int    @map("platform_share_paisa")
+  institutionSharePaisa Int @map("institution_share_paisa")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  institution Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+
+  @@unique([institutionId, period])
+  @@map("revenue_share_ledgers")
+}
+
+model SafeguardingAlert {
+  id            String               @id @default(cuid())
+  institutionId String               @map("institution_id")
+  studentId     String?              @map("student_id")
+  severity      SafeguardingSeverity @default(HIGH)
+  triggerText   String               @map("trigger_text")
+  status        String               @default("OPEN")
+  notifiedAt    DateTime?            @map("notified_at")
+  createdAt     DateTime             @default(now()) @map("created_at")
+  updatedAt     DateTime             @updatedAt @map("updated_at")
+
+  institution Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+
+  @@index([institutionId, status])
+  @@map("safeguarding_alerts")
+}
+
+// ─── Phase 3: Surveys / competitor / transport / portal ────────────────────────
+
+model Survey {
+  id            String   @id @default(cuid())
+  institutionId String   @map("institution_id")
+  title         String
+  teacherUserId String?  @map("teacher_user_id")
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  institution Institution     @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  responses   SurveyResponse[]
+
+  @@index([institutionId])
+  @@map("surveys")
+}
+
+model SurveyResponse {
+  id            String   @id @default(cuid())
+  institutionId String   @map("institution_id")
+  surveyId      String   @map("survey_id")
+  guardianId    String?  @map("guardian_id")
+  rating        Int
+  comment       String?
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  survey Survey @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+
+  @@index([institutionId, surveyId])
+  @@map("survey_responses")
+}
+
+model CompetitorWatch {
+  id            String   @id @default(cuid())
+  institutionId String   @map("institution_id")
+  name          String
+  area          String?
+  feeNotes      String?  @map("fee_notes")
+  batchNotes    String?  @map("batch_notes")
+  adNotes       String?  @map("ad_notes")
+  lastCheckedAt DateTime? @map("last_checked_at")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  institution Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+
+  @@index([institutionId])
+  @@map("competitor_watches")
+}
+
+model TransportRoute {
+  id            String   @id @default(cuid())
+  institutionId String   @map("institution_id")
+  name          String
+  driverPhone   String?  @map("driver_phone")
+  vehicleLabel  String?  @map("vehicle_label")
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  institution Institution     @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  pings       TransportPing[]
+  alerts      TransportAlert[]
+
+  @@index([institutionId])
+  @@map("transport_routes")
+}
+
+model TransportPing {
+  id            String   @id @default(cuid())
+  institutionId String   @map("institution_id")
+  routeId       String   @map("route_id")
+  lat           Float
+  lng           Float
+  recordedAt    DateTime @default(now()) @map("recorded_at")
+
+  route TransportRoute @relation(fields: [routeId], references: [id], onDelete: Cascade)
+
+  @@index([institutionId, routeId, recordedAt])
+  @@map("transport_pings")
+}
+
+model TransportAlert {
+  id            String   @id @default(cuid())
+  institutionId String   @map("institution_id")
+  routeId       String   @map("route_id")
+  message       String
+  sentAt        DateTime @default(now()) @map("sent_at")
+
+  route TransportRoute @relation(fields: [routeId], references: [id], onDelete: Cascade)
+
+  @@index([institutionId, routeId])
+  @@map("transport_alerts")
+}
+
+model ParentMagicLink {
+  id            String    @id @default(cuid())
+  institutionId String    @map("institution_id")
+  guardianId    String    @map("guardian_id")
+  token         String    @unique
+  expiresAt     DateTime  @map("expires_at")
+  usedAt        DateTime? @map("used_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  institution Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+
+  @@index([institutionId, guardianId])
+  @@map("parent_magic_links")
 }
