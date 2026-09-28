@@ -1,14 +1,13 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { requireSession } from "@/lib/access";
 import { ensurePersonalOrg, getPrimaryWorkspaceForUser } from "@/lib/tenancy";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { signOut } from "@/auth";
 import { Button } from "@/components/ui/button";
-import { OnboardingStep } from "@postpilot/db";
 
 const nav = [
   { href: "/app", label: "Dashboard" },
+  { href: "/app/studio", label: "Design Studio" },
   { href: "/app/onboarding", label: "Onboarding" },
   { href: "/app/brand", label: "Brand" },
   { href: "/app/settings", label: "Settings" },
@@ -23,13 +22,6 @@ export default async function AppLayout({
   await ensurePersonalOrg(session.user.id, session.user.name ?? undefined);
   const workspace = await getPrimaryWorkspaceForUser(session.user.id);
 
-  if (
-    workspace.onboardingStep !== OnboardingStep.COMPLETE &&
-    // allow onboarding routes themselves
-    true
-  ) {
-    // Soft nudge only; pages decide hard redirects.
-  }
 
   return (
     <div className="min-h-screen bg-app-grain">
@@ -85,13 +77,4 @@ export default async function AppLayout({
       </div>
     </div>
   );
-}
-
-export async function requireCompletedOnboarding() {
-  const session = await requireSession();
-  const workspace = await getPrimaryWorkspaceForUser(session.user.id);
-  if (workspace.onboardingStep !== OnboardingStep.COMPLETE) {
-    redirect("/app/onboarding");
-  }
-  return { session, workspace };
 }

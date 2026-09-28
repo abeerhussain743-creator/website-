@@ -1,6 +1,6 @@
 {
   "name": "@postpilot/ai",
-  "version": "0.0.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "main": "./dist/index.js",
@@ -14,10 +14,17 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "lint": "echo \"Phase 2 stub\""
+    "test": "vitest run",
+    "lint": "echo \"ok\""
+  },
+  "dependencies": {
+    "@postpilot/shared": "workspace:*",
+    "zod": "^3.24.1"
   },
   "devDependencies": {
     "@postpilot/typescript-config": "workspace:*",
-    "typescript": "^5.7.2"
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
   }
 }

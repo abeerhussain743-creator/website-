@@ -1,6 +1,6 @@
 {
   "name": "@postpilot/design",
-  "version": "0.0.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "main": "./dist/index.js",
@@ -9,15 +9,27 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./catalog": {
+      "types": "./dist/catalog.d.ts",
+      "import": "./dist/catalog.js"
     }
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "lint": "echo \"Phase 6 stub\""
+    "test": "vitest run",
+    "lint": "echo \"ok\""
+  },
+  "dependencies": {
+    "@resvg/resvg-js": "^2.6.2",
+    "satori": "^0.12.0",
+    "zod": "^3.24.1"
   },
   "devDependencies": {
     "@postpilot/typescript-config": "workspace:*",
-    "typescript": "^5.7.2"
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
   }
 }

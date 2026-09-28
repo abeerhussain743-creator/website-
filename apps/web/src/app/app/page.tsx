@@ -61,6 +61,9 @@ export default async function DashboardPage() {
           Your Brand DNA and competitor pipeline arrive in Phases 2–3.
         </p>
         <div className="mt-4 flex flex-wrap gap-3">
+          <Link href="/app/studio">
+            <Button>Open Design Studio</Button>
+          </Link>
           <Link href="/app/brand">
             <Button variant="secondary">Edit brand</Button>
           </Link>

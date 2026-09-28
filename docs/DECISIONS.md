@@ -84,3 +84,10 @@ Format: ADR-lite. Newest first within each phase.
 
 Phase 1 foundation implemented after schema approval: monorepo, auth, tenancy, onboarding, brand kit, UI shell, CI, worker ping consumer, scraper health stub.
 
+
+### ADR-011: Design Studio + local creative engine (post Phase 1)
+
+**Status:** Accepted  
+**Context:** Owner asked to make the system powerful at designing best-in-class social posts before waiting on paid LLM keys.  
+**Decision:** Ship Design Studio with (1) `@postpilot/ai` structured post generation + quality critic, (2) `@postpilot/design` Satori/resvg premium template families, (3) local creative engine that works without API keys; Anthropic/OpenAI adapters plug in when keys are set.  
+**Consequences:** Users can generate scored copy + PNG designs immediately; remote LLM providers improve copy later without UI changes.
