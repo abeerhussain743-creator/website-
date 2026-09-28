@@ -15,10 +15,22 @@ export default async function ReviewPage() {
         include: {
           drafts: { where: { isActive: true }, take: 1 },
           designAssets: { orderBy: { createdAt: "desc" }, take: 1 },
+          comments: { orderBy: { createdAt: "desc" }, take: 3 },
         },
       },
     },
   });
+
+  const latestRun = await prisma.pipelineRun.findFirst({
+    where: { workspaceId: workspace.id },
+    orderBy: { createdAt: "desc" },
+  });
+  const notifyStep = Array.isArray(latestRun?.stepsJson)
+    ? (latestRun!.stepsJson as Array<{ step?: string; detail?: { approveUrl?: string } }>).find(
+        (s) => s.step === "NOTIFY_FOR_APPROVAL",
+      )
+    : null;
+  const approveUrl = notifyStep?.detail?.approveUrl;
 
   return (
     <div className="space-y-8">
@@ -37,6 +49,16 @@ export default async function ReviewPage() {
           />
         ) : null}
       </div>
+
+      {approveUrl ? (
+        <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 text-sm">
+          <p className="font-medium">Client magic link</p>
+          <p className="mt-1 break-all text-[var(--muted)]">{approveUrl}</p>
+          <p className="mt-2 text-xs text-[var(--muted)]">
+            Also delivered via console / Resend / WhatsApp when configured.
+          </p>
+        </div>
+      ) : null}
 
       {!plan ? (
         <p className="text-sm text-[var(--muted)]">
@@ -78,6 +100,11 @@ export default async function ReviewPage() {
                   <p className="mt-3 whitespace-pre-wrap text-sm text-[var(--muted)]">
                     {draft?.caption?.slice(0, 280) ?? "No caption yet"}
                   </p>
+                  {post.comments[0] ? (
+                    <p className="mt-2 rounded-lg bg-ink-100/60 px-2 py-1 text-xs dark:bg-ink-800/60">
+                      Feedback: {post.comments[0].body}
+                    </p>
+                  ) : null}
                   <p className="mt-2 text-xs text-[var(--muted)]">
                     Quality{" "}
                     {(draft?.qualityScores as { overall?: number } | null)?.overall ??

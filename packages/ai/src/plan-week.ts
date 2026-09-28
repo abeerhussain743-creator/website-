@@ -54,11 +54,25 @@ const TOPICS = [
 ];
 
 export function buildWeeklyPlan(input: {
-  brand: BrandContext;
+  brand: BrandContext & { pillars?: string[] };
   stage: StageReportResult;
   weekStart?: Date;
   platforms?: Array<"INSTAGRAM" | "FACEBOOK" | "LINKEDIN" | "X" | "TIKTOK">;
   promo?: string;
+  playbook?: {
+    topicClusters?: string[];
+    hookPatterns?: string[];
+    winningFormats?: Array<{ format: string; share: number }>;
+    bestPostingWindows?: Array<{ day: string; hours: number[] }>;
+    trendingThemes?: string[];
+    contentGaps?: string[];
+  } | null;
+  learning?: {
+    topFormats?: string[];
+    topPillars?: string[];
+    nextWeekChanges?: string[];
+    provenHooks?: string[];
+  } | null;
 }): WeeklyPlan {
   const weekStart = startOfWeek(input.weekStart ?? new Date());
   const weekEnd = new Date(weekStart);
@@ -66,31 +80,59 @@ export function buildWeeklyPlan(input: {
   const platforms = input.platforms?.length ? input.platforms : ["INSTAGRAM"];
   const mix = input.stage.contentMix;
   const formats: Array<WeeklyPlan["days"][number]["format"]> = [];
-  const reelN = Math.round((mix.reel / 100) * 7);
-  const carN = Math.round((mix.carousel / 100) * 7);
+  // Prefer learning / playbook format tilt when available
+  const learnedTop = input.learning?.topFormats?.[0];
+  let reelN = Math.round((mix.reel / 100) * 7);
+  let carN = Math.round((mix.carousel / 100) * 7);
+  if (learnedTop === "REEL") reelN = Math.min(5, reelN + 1);
+  if (learnedTop === "CAROUSEL") carN = Math.min(4, carN + 1);
+  if (input.playbook?.winningFormats?.length) {
+    const reelShare =
+      input.playbook.winningFormats.find((f) => f.format === "REEL")?.share ?? mix.reel;
+    const carShare =
+      input.playbook.winningFormats.find((f) => f.format === "CAROUSEL")?.share ??
+      mix.carousel;
+    reelN = Math.round((reelShare / 100) * 7);
+    carN = Math.round((carShare / 100) * 7);
+  }
   for (let i = 0; i < reelN; i++) formats.push("REEL");
   for (let i = 0; i < carN; i++) formats.push("CAROUSEL");
   while (formats.length < 7) formats.push("SINGLE_IMAGE");
-  // shuffle lightly for variety without RNG dependency
   const rotated = [...formats.slice(2), ...formats.slice(0, 2)];
 
   const pillars =
-    (input.brand as { pillars?: string[] }).pillars ??
-    [
-      "Craft & expertise",
-      "Brand ritual",
-      "Customer proof",
-      "Community & culture",
-      "Offers & launches",
-    ];
+    input.learning?.topPillars?.length
+      ? [
+          ...input.learning.topPillars,
+          ...(input.brand.pillars ?? []),
+        ].filter((v, i, a) => a.indexOf(v) === i)
+      : input.brand.pillars ??
+        [
+          "Craft & expertise",
+          "Brand ritual",
+          "Customer proof",
+          "Community & culture",
+          "Offers & launches",
+        ];
 
-  const bestHours = [9, 12, 17, 19];
+  const topicsFromPlaybook = [
+    ...(input.playbook?.contentGaps ?? []).map((g) => `Fill the gap: ${g}`),
+    ...(input.playbook?.topicClusters ?? []),
+    ...(input.playbook?.trendingThemes ?? []).map((t) => `Trend: ${t}`),
+    ...TOPICS,
+  ];
+
+  const windowHours =
+    input.playbook?.bestPostingWindows?.flatMap((w) => w.hours) ?? [9, 12, 17, 19];
+  const bestHours = windowHours.length ? windowHours : [9, 12, 17, 19];
+  const hookPatterns = input.playbook?.hookPatterns ?? [];
+
   const days = Array.from({ length: 7 }, (_, dayIndex) => {
     const date = new Date(weekStart);
     date.setUTCDate(weekStart.getUTCDate() + dayIndex);
     const format = rotated[dayIndex]!;
     const pillar = pillars[dayIndex % pillars.length]!;
-    let topic = TOPICS[dayIndex]!;
+    let topic = topicsFromPlaybook[dayIndex % topicsFromPlaybook.length]!;
     if (input.promo && dayIndex === 5) {
       topic = `Promo spotlight: ${input.promo}`;
     }
@@ -122,6 +164,12 @@ export function buildWeeklyPlan(input: {
             ? "leads"
             : "engagement";
 
+    const hookAngle =
+      hookPatterns[dayIndex % Math.max(hookPatterns.length, 1)] ??
+      (safeFormat === "REEL"
+        ? "Pattern interrupt in first 2 seconds"
+        : "Curiosity gap + concrete promise");
+
     return plannedDaySchema.parse({
       dayIndex,
       date: dateOnly(date),
@@ -129,10 +177,7 @@ export function buildWeeklyPlan(input: {
       format: safeFormat,
       pillar,
       topic,
-      hookAngle:
-        safeFormat === "REEL"
-          ? "Pattern interrupt in first 2 seconds"
-          : "Curiosity gap + concrete promise",
+      hookAngle,
       objective,
       targetPublishAt: iso(date),
       rationale: `Stage ${input.stage.stage} mix favors ${safeFormat}. Pillar “${pillar}” with ${objective} objective.`,
@@ -140,18 +185,21 @@ export function buildWeeklyPlan(input: {
     });
   });
 
-  // enforce no back-to-back same pillar
   for (let i = 1; i < days.length; i++) {
     if (days[i]!.pillar === days[i - 1]!.pillar) {
       days[i]!.pillar = pillars[(i + 2) % pillars.length]!;
     }
   }
 
+  const learningNote = input.learning?.nextWeekChanges?.[0]
+    ? ` Learning: ${input.learning.nextWeekChanges[0]}.`
+    : "";
+
   return weeklyPlanSchema.parse({
     weekStart: dateOnly(weekStart),
     weekEnd: dateOnly(weekEnd),
     title: `${input.brand.businessName} — Week of ${dateOnly(weekStart)}`,
-    rationale: `Built for ${input.stage.stage} with mix ${mix.reel}/${mix.carousel}/${mix.single} (reel/carousel/single).`,
+    rationale: `Built for ${input.stage.stage} with mix ${mix.reel}/${mix.carousel}/${mix.single} (reel/carousel/single).${learningNote}`,
     days,
   });
 }

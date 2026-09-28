@@ -11,6 +11,7 @@ const nav = [
   { href: "/app/calendar", label: "Calendar" },
   { href: "/app/review", label: "Review Board" },
   { href: "/app/competitors", label: "Competitors" },
+  { href: "/app/trends", label: "Trend Radar" },
   { href: "/app/stage", label: "Account Stage" },
   { href: "/app/analytics", label: "Analytics" },
   { href: "/app/reports", label: "Weekly Report" },

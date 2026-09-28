@@ -6,9 +6,20 @@ import {
   generatePost,
   discoverCompetitors,
   buildNichePlaybook,
+  ingestWebsite,
+  deriveLearningInsights,
+  enrichBrandFromDna,
+  notifyApprovalLink,
+  QUALITY_THRESHOLD,
   type BrandContext,
+  type NichePlaybookDoc,
 } from "@postpilot/ai";
-import { publishPost, simulateMetrics } from "@postpilot/social";
+import {
+  publishPost,
+  simulateMetrics,
+  syncAccountMetrics,
+  isPublishDryRun,
+} from "@postpilot/social";
 import { storageFromEnv } from "@postpilot/storage";
 import { PIPELINE_STEPS, type PipelineJob } from "./index.js";
 import { mkdtemp, writeFile, readFile, rm } from "node:fs/promises";
@@ -19,6 +30,19 @@ import { promisify } from "node:util";
 import { createHash, randomBytes } from "node:crypto";
 
 const execFileAsync = promisify(execFile);
+
+function mapPillar(name?: string | null): "EDUCATIONAL" | "ENTERTAINMENT" | "BEHIND_THE_SCENES" | "TESTIMONIAL" | "PRODUCT" | "PROMOTIONAL" | "COMMUNITY" | "THOUGHT_LEADERSHIP" | "UGC" | "TREND" | "OTHER" {
+  const n = (name || "").toLowerCase();
+  if (n.includes("craft") || n.includes("expertise") || n.includes("educat")) return "EDUCATIONAL";
+  if (n.includes("ritual") || n.includes("behind")) return "BEHIND_THE_SCENES";
+  if (n.includes("proof") || n.includes("testimonial") || n.includes("customer")) return "TESTIMONIAL";
+  if (n.includes("community") || n.includes("culture")) return "COMMUNITY";
+  if (n.includes("offer") || n.includes("launch") || n.includes("promo")) return "PROMOTIONAL";
+  if (n.includes("product")) return "PRODUCT";
+  if (n.includes("thought") || n.includes("pov") || n.includes("bold")) return "THOUGHT_LEADERSHIP";
+  if (n.includes("trend")) return "TREND";
+  return "OTHER";
+}
 
 async function markStep(
   pipelineRunId: string,
@@ -79,6 +103,31 @@ async function loadBrandContext(workspaceId: string): Promise<BrandContext> {
   };
 }
 
+async function fetchScraperJson(
+  pathName: string,
+  body: unknown,
+): Promise<unknown | null> {
+  const base = process.env.SCRAPER_URL;
+  if (!base) return null;
+  try {
+    const res = await fetch(`${base.replace(/\/$/, "")}${pathName}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(process.env.SCRAPER_API_KEY
+          ? { "X-API-Key": process.env.SCRAPER_API_KEY }
+          : {}),
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
 async function renderViaCli(input: unknown): Promise<Buffer> {
   const tmp = await mkdtemp(path.join(tmpdir(), "pp-pipe-"));
   try {
@@ -95,10 +144,53 @@ async function renderViaCli(input: unknown): Promise<Buffer> {
   }
 }
 
+async function assertCredits(workspaceId: string, cost = 1) {
+  const ws = await prisma.workspace.findUniqueOrThrow({
+    where: { id: workspaceId },
+    include: { organization: { include: { subscription: true } } },
+  });
+  const sub = ws.organization.subscription;
+  if (!sub) return;
+  if (sub.creditBalance < cost) {
+    // Demo safety: top up instead of hard-failing empty trials
+    if (process.env.NODE_ENV !== "production" || sub.metaJson) {
+      await prisma.subscription.update({
+        where: { id: sub.id },
+        data: { creditBalance: sub.creditBalance + cost + 50 },
+      });
+      await prisma.creditLedger.create({
+        data: {
+          workspaceId,
+          amount: cost + 50,
+          reason: "GRANT",
+          description: "Auto top-up for demo/trial",
+          balanceAfter: sub.creditBalance + cost + 50,
+        },
+      });
+    } else {
+      throw new Error("Insufficient AI credits — upgrade plan in Settings");
+    }
+  }
+  const fresh = await prisma.subscription.findUniqueOrThrow({ where: { id: sub.id } });
+  const balanceAfter = fresh.creditBalance - cost;
+  await prisma.subscription.update({
+    where: { id: sub.id },
+    data: { creditBalance: balanceAfter },
+  });
+  await prisma.creditLedger.create({
+    data: {
+      workspaceId,
+      amount: -cost,
+      reason: "GENERATION",
+      description: "Pipeline generation",
+      balanceAfter,
+    },
+  });
+}
+
 export async function runWeeklyPipeline(job: PipelineJob) {
   const { workspaceId, pipelineRunId } = job;
-  const steps =
-    job.step === "FULL" ? [...PIPELINE_STEPS] : [job.step];
+  const steps = job.step === "FULL" ? [...PIPELINE_STEPS] : [job.step];
 
   await prisma.pipelineRun.update({
     where: { id: pipelineRunId },
@@ -106,18 +198,51 @@ export async function runWeeklyPipeline(job: PipelineJob) {
   });
 
   try {
-    const brand = await loadBrandContext(workspaceId);
+    await assertCredits(workspaceId, steps.includes("GENERATE_POSTS") ? 7 : 1);
+    let brand = await loadBrandContext(workspaceId);
     let contentPlanId: string | undefined;
+
+    // Enrich with website signals early when URL present
+    const brandRow = await prisma.brandProfile.findUnique({ where: { workspaceId } });
+    if (brandRow?.websiteUrl) {
+      const signals = await ingestWebsite({
+        url: brandRow.websiteUrl,
+        businessName: brand.businessName,
+      });
+      if (!brand.usp && signals.description) {
+        brand = { ...brand, usp: signals.description.slice(0, 240) };
+      }
+      if (!brand.audience?.desires && signals.aboutSnippet) {
+        brand = {
+          ...brand,
+          audience: {
+            ...brand.audience,
+            desires: signals.aboutSnippet.slice(0, 160),
+          },
+        };
+      }
+      (job as { _websiteSignals?: typeof signals })._websiteSignals = signals;
+    }
 
     for (const step of steps) {
       await markStep(pipelineRunId, step, "running");
 
       if (step === "REFRESH_COMPETITORS") {
-        const found = discoverCompetitors({
-          businessName: brand.businessName,
+        const scraped = (await fetchScraperJson("/v1/competitors/discover", {
+          business_name: brand.businessName,
           niche: brand.niche,
           industry: brand.industry,
-        });
+        })) as { competitors?: ReturnType<typeof discoverCompetitors> } | null;
+
+        const found =
+          scraped?.competitors?.length
+            ? scraped.competitors
+            : discoverCompetitors({
+                businessName: brand.businessName,
+                niche: brand.niche,
+                industry: brand.industry,
+              });
+
         for (const c of found) {
           const row = await prisma.competitor.upsert({
             where: {
@@ -132,7 +257,7 @@ export async function runWeeklyPipeline(job: PipelineJob) {
               platform: c.platform,
               handle: c.handle,
               tier: c.tier,
-              source: "LLM",
+              source: scraped ? "PLATFORM_SEARCH" : "LLM",
               momentumScore: c.momentumScore,
               relevanceScore: c.relevanceScore,
               displayName: c.handle,
@@ -145,16 +270,38 @@ export async function runWeeklyPipeline(job: PipelineJob) {
               metaJson: { why: c.why },
             },
           });
+
+          // Momentum from snapshot deltas when prior exists
+          const prior = await prisma.competitorSnapshot.findFirst({
+            where: { competitorId: row.id },
+            orderBy: { capturedAt: "desc" },
+          });
+          const growth =
+            prior?.followers && prior.followers > 0
+              ? ((c.followers - prior.followers) / prior.followers) * 100
+              : c.growth7dPct;
+          const momentum =
+            prior && growth !== c.growth7dPct
+              ? Math.min(99, Math.max(10, Math.round(50 + growth * 3)))
+              : c.momentumScore;
+
+          await prisma.competitor.update({
+            where: { id: row.id },
+            data: { momentumScore: momentum },
+          });
           await prisma.competitorSnapshot.create({
             data: {
               competitorId: row.id,
               followers: c.followers,
               engagementRate: c.engagementRate,
-              growth7dPct: c.growth7dPct,
+              growth7dPct: growth,
             },
           });
         }
-        await markStep(pipelineRunId, step, "completed", { count: found.length });
+        await markStep(pipelineRunId, step, "completed", {
+          count: found.length,
+          source: scraped ? "scraper" : "seed",
+        });
       }
 
       if (step === "ANALYZE_COMPETITOR_POSTS") {
@@ -163,35 +310,79 @@ export async function runWeeklyPipeline(job: PipelineJob) {
         });
         let created = 0;
         for (const c of competitors) {
-          for (let i = 0; i < 5; i++) {
-            const platformPostId = `${c.handle}_post_${i + 1}`;
+          const scraped = (await fetchScraperJson("/v1/competitors/posts", {
+            handle: c.handle,
+            platform: c.platform,
+            niche: brand.niche,
+            limit: 5,
+          })) as {
+            posts?: Array<{
+              platformPostId: string;
+              format: string;
+              caption: string;
+              postedAtOffsetDays: number;
+              likeCount: number;
+              commentCount: number;
+              saveCount: number;
+              engagementTotal: number;
+              isOutlier: boolean;
+              outlierReason?: string | null;
+              contentPillar?: string;
+              hookType?: string;
+              ctaType?: string;
+            }>;
+          } | null;
+
+          const posts =
+            scraped?.posts ??
+            Array.from({ length: 5 }, (_, i) => ({
+              platformPostId: `${c.handle}_post_${i + 1}`,
+              format: i % 3 === 0 ? "REEL" : i % 3 === 1 ? "CAROUSEL" : "SINGLE_IMAGE",
+              caption: `Sample public post from @${c.handle} about ${brand.niche || "the niche"} (#${i + 1})`,
+              postedAtOffsetDays: i * 2,
+              likeCount: 40 + i * 17,
+              commentCount: 3 + i,
+              saveCount: 5 + i * 2,
+              engagementTotal: 50 + i * 20,
+              isOutlier: i === 0,
+              outlierReason:
+                i === 0
+                  ? "3× median engagement — strong hook + saveable carousel structure"
+                  : null,
+              contentPillar: "EDUCATIONAL",
+              hookType: "CONTRARIAN",
+              ctaType: "SAVE",
+            }));
+
+          for (const p of posts) {
             await prisma.competitorPost.upsert({
               where: {
                 competitorId_platformPostId: {
                   competitorId: c.id,
-                  platformPostId,
+                  platformPostId: p.platformPostId,
                 },
               },
               create: {
                 competitorId: c.id,
-                platformPostId,
-                format: i % 3 === 0 ? "REEL" : i % 3 === 1 ? "CAROUSEL" : "SINGLE_IMAGE",
-                caption: `Sample public post from @${c.handle} about ${brand.niche || "the niche"} (#${i + 1})`,
-                postedAt: new Date(Date.now() - i * 86400000 * 2),
-                likeCount: 40 + i * 17,
-                commentCount: 3 + i,
-                saveCount: 5 + i * 2,
-                engagementTotal: 50 + i * 20,
-                isOutlier: i === 0,
-                outlierReason:
-                  i === 0
-                    ? "3× median engagement — strong hook + saveable carousel structure"
-                    : null,
-                contentPillar: "EDUCATIONAL",
-                hookType: "CONTRARIAN",
-                ctaType: "SAVE",
+                platformPostId: p.platformPostId,
+                format: p.format as never,
+                caption: p.caption,
+                postedAt: new Date(Date.now() - p.postedAtOffsetDays * 86400000),
+                likeCount: p.likeCount,
+                commentCount: p.commentCount,
+                saveCount: p.saveCount,
+                engagementTotal: p.engagementTotal,
+                isOutlier: p.isOutlier,
+                outlierReason: p.outlierReason ?? null,
+                contentPillar: "EDUCATIONAL" as const,
+                hookType: "CONTRARIAN" as const,
+                ctaType: "SAVE" as const,
               },
-              update: {},
+              update: {
+                likeCount: p.likeCount,
+                engagementTotal: p.engagementTotal,
+                isOutlier: p.isOutlier,
+              },
             });
             created++;
           }
@@ -228,9 +419,10 @@ export async function runWeeklyPipeline(job: PipelineJob) {
       }
 
       if (step === "SYNC_OWN_ACCOUNT_METRICS") {
-        let account = await prisma.socialAccount.findFirst({
-          where: { workspaceId, platform: "INSTAGRAM", deletedAt: null },
+        const accounts = await prisma.socialAccount.findMany({
+          where: { workspaceId, deletedAt: null },
         });
+        let account = accounts.find((a) => a.platform === "INSTAGRAM") ?? accounts[0];
         if (!account) {
           account = await prisma.socialAccount.create({
             data: {
@@ -244,31 +436,30 @@ export async function runWeeklyPipeline(job: PipelineJob) {
             },
           });
         }
+        const metrics = await syncAccountMetrics(
+          account.platform,
+          account.externalAccountId,
+        );
         await prisma.accountSnapshot.create({
           data: {
             socialAccountId: account.id,
-            followers: 4200,
-            following: 310,
-            mediaCount: 86,
-            reach: 9100,
-            impressions: 14000,
-            engagementRate: 3.4,
-            profileViews: 520,
+            ...metrics,
           },
         });
         await prisma.socialAccount.update({
           where: { id: account.id },
           data: { lastSyncAt: new Date() },
         });
-        await markStep(pipelineRunId, step, "completed", { followers: 4200 });
+        await markStep(pipelineRunId, step, "completed", {
+          followers: metrics.followers,
+          platform: account.platform,
+        });
       }
 
       if (step === "DIAGNOSE_STAGE") {
         const snap = await prisma.accountSnapshot.findFirst({
           orderBy: { capturedAt: "desc" },
-          where: {
-            socialAccount: { workspaceId },
-          },
+          where: { socialAccount: { workspaceId } },
         });
         const report = diagnoseStage({
           followers: snap?.followers ?? 500,
@@ -282,7 +473,7 @@ export async function runWeeklyPipeline(job: PipelineJob) {
             stage: report.stage,
             score: report.score,
             nicheRelative: report.nicheRelative,
-            signalsJson: report.signals,
+            signalsJson: { ...report.signals, followers: snap?.followers, engagementRate: snap?.engagementRate },
             bottlenecksJson: report.bottlenecks,
             contentMixJson: report.contentMix,
             summary: report.summary,
@@ -291,10 +482,28 @@ export async function runWeeklyPipeline(job: PipelineJob) {
           },
         });
 
-        // Ensure Brand DNA exists
         const dnaCount = await prisma.brandDNA.count({ where: { workspaceId } });
         if (dnaCount === 0) {
-          const dna = generateBrandDna(brand);
+          const website = brandRow?.websiteUrl
+            ? await ingestWebsite({
+                url: brandRow.websiteUrl,
+                businessName: brand.businessName,
+              })
+            : undefined;
+          let dna = generateBrandDna(brand);
+          if (website) {
+            dna = {
+              ...dna,
+              audiencePersona: {
+                ...dna.audiencePersona,
+                summary:
+                  website.description ||
+                  website.aboutSnippet ||
+                  dna.audiencePersona.summary,
+              },
+              rawDocument: `${dna.rawDocument}\n\n## Website\n${website.url}\n${website.title ?? ""}\n${website.description ?? ""}`,
+            };
+          }
           await prisma.brandDNA.create({
             data: {
               workspaceId,
@@ -326,11 +535,57 @@ export async function runWeeklyPipeline(job: PipelineJob) {
             (stageRow?.signalsJson as { engagementRate?: number })?.engagementRate ?? 3.4,
           postsLast30Days: 10,
         });
+        const dna = await prisma.brandDNA.findFirst({
+          where: { workspaceId, isActive: true },
+        });
+        const playbookRow = await prisma.nichePlaybook.findFirst({
+          where: { workspaceId, isActive: true },
+        });
+        const lastReport = await prisma.weeklyReport.findFirst({
+          where: { workspaceId },
+          orderBy: { weekStart: "desc" },
+        });
+        const learningSummary = lastReport?.summaryJson as {
+          whatWorked?: string[];
+          whatDidnt?: string[];
+          nextWeekChanges?: string[];
+          provenHooks?: string[];
+          topFormats?: string[];
+          topPillars?: string[];
+        } | null;
+
+        const enriched = enrichBrandFromDna(brand, dna as never);
+        const playbook: NichePlaybookDoc | null = playbookRow
+          ? {
+              winningFormats: playbookRow.winningFormats as NichePlaybookDoc["winningFormats"],
+              hookPatterns: playbookRow.hookPatterns as string[],
+              topicClusters: playbookRow.topicClusters as string[],
+              bestPostingWindows:
+                playbookRow.bestPostingWindows as NichePlaybookDoc["bestPostingWindows"],
+              trendingThemes: playbookRow.trendingThemes as string[],
+              contentGaps: playbookRow.contentGaps as string[],
+              whatChanged: playbookRow.whatChanged as string[],
+            }
+          : null;
+
+        const connected = await prisma.socialAccount.findMany({
+          where: { workspaceId, deletedAt: null, status: "CONNECTED" },
+          select: { platform: true },
+        });
+        const platforms = connected.length
+          ? (connected.map((c) => c.platform) as Array<
+              "INSTAGRAM" | "FACEBOOK" | "LINKEDIN" | "X" | "TIKTOK"
+            >)
+          : (["INSTAGRAM"] as const);
+
         const plan = buildWeeklyPlan({
-          brand,
+          brand: enriched,
           stage,
           promo: job.promo,
           weekStart: job.weekStart ? new Date(job.weekStart) : undefined,
+          playbook,
+          learning: learningSummary,
+          platforms: [...new Set(platforms)],
         });
 
         const existing = await prisma.contentPlan.findUnique({
@@ -362,7 +617,7 @@ export async function runWeeklyPipeline(job: PipelineJob) {
                 dayIndex: d.dayIndex,
                 platforms: d.platforms,
                 format: d.format,
-                pillar: "EDUCATIONAL",
+                pillar: mapPillar(d.pillar) as never,
                 topic: d.topic,
                 hookAngle: d.hookAngle,
                 objective: d.objective,
@@ -387,36 +642,119 @@ export async function runWeeklyPipeline(job: PipelineJob) {
           (contentPlanId
             ? await prisma.contentPlan.findUnique({
                 where: { id: contentPlanId },
-                include: { posts: true },
+                include: {
+                  posts: {
+                    include: {
+                      drafts: { where: { isActive: true }, take: 1 },
+                      approvals: { orderBy: { createdAt: "desc" }, take: 1 },
+                    },
+                  },
+                },
               })
             : await prisma.contentPlan.findFirst({
                 where: { workspaceId, status: ContentPlanStatus.GENERATING },
                 orderBy: { createdAt: "desc" },
-                include: { posts: true },
+                include: {
+                  posts: {
+                    include: {
+                      drafts: { where: { isActive: true }, take: 1 },
+                      approvals: { orderBy: { createdAt: "desc" }, take: 1 },
+                    },
+                  },
+                },
               })) ??
           (await prisma.contentPlan.findFirst({
             where: { workspaceId },
             orderBy: { createdAt: "desc" },
-            include: { posts: true },
+            include: {
+              posts: {
+                include: {
+                  drafts: { where: { isActive: true }, take: 1 },
+                  approvals: { orderBy: { createdAt: "desc" }, take: 1 },
+                },
+              },
+            },
           }));
         if (!plan) throw new Error("No content plan to generate");
         contentPlanId = plan.id;
 
+        const dna = await prisma.brandDNA.findFirst({
+          where: { workspaceId, isActive: true },
+        });
+        const enriched = enrichBrandFromDna(brand, dna as never);
+
         if (step === "QUALITY_CRITIC") {
-          // Drafts already scored during GENERATE_POSTS; mark complete.
+          let rewritten = 0;
+          for (const post of plan.posts) {
+            const draft = post.drafts[0];
+            const overall =
+              (draft?.qualityScores as { overall?: number } | null)?.overall ?? 0;
+            const feedback =
+              post.approvals.find((a) => a.status === "CHANGES_REQUESTED")?.feedback ||
+              (overall < QUALITY_THRESHOLD
+                ? "Sharpen the hook, add a concrete niche detail, and end with a human CTA."
+                : undefined);
+            if (!feedback && draft?.qualityPassed) continue;
+
+            const generated = await generatePost({
+              brand: enriched,
+              platform: post.platforms[0] ?? "INSTAGRAM",
+              format: post.format as never,
+              topic: post.topic ?? undefined,
+              objective: (post.objective as never) ?? "engagement",
+              pillar: post.pillar ?? undefined,
+              feedback: feedback ?? undefined,
+              templateFamily: undefined,
+            });
+            await prisma.postDraft.updateMany({
+              where: { plannedPostId: post.id, isActive: true },
+              data: { isActive: false },
+            });
+            const version =
+              (await prisma.postDraft.count({ where: { plannedPostId: post.id } })) + 1;
+            await prisma.postDraft.create({
+              data: {
+                plannedPostId: post.id,
+                version,
+                isActive: true,
+                selectedHook: generated.selectedHook,
+                hooksJson: generated.hooks,
+                caption: generated.caption,
+                hashtags: generated.hashtags,
+                carouselSlides: generated.slides,
+                reelScript: generated.reelScript,
+                altText: generated.altText,
+                firstComment: generated.hashtags.slice(0, 5).join(" "),
+                qualityScores: generated.qualityScores,
+                qualityPassed: generated.qualityPassed,
+                originalityScore: generated.qualityScores.originality,
+              },
+            });
+            await prisma.plannedPost.update({
+              where: { id: post.id },
+              data: {
+                status: generated.qualityPassed
+                  ? PlannedPostStatus.READY
+                  : PlannedPostStatus.GENERATING,
+              },
+            });
+            rewritten++;
+          }
           await markStep(pipelineRunId, step, "completed", {
             posts: plan.posts.length,
+            rewritten,
           });
           continue;
         }
 
         for (const post of plan.posts) {
           const generated = await generatePost({
-            brand,
+            brand: enriched,
             platform: post.platforms[0] ?? "INSTAGRAM",
             format: post.format as never,
             topic: post.topic ?? undefined,
             objective: (post.objective as never) ?? "engagement",
+            pillar: post.pillar ?? undefined,
           });
           await prisma.postDraft.updateMany({
             where: { plannedPostId: post.id, isActive: true },
@@ -482,56 +820,65 @@ export async function runWeeklyPipeline(job: PipelineJob) {
               : post.format === "REEL"
                 ? "bold"
                 : "editorial";
-          const png = await renderViaCli({
-            family,
-            size: "FEED_PORTRAIT",
-            brandKit: {
-              primaryColor: brand.brandKit?.primaryColor ?? "#0F3D3E",
-              secondaryColor: brand.brandKit?.secondaryColor ?? "#E8D5B7",
-              accentColor: brand.brandKit?.accentColor ?? "#D97706",
-              backgroundColor: brand.brandKit?.backgroundColor ?? "#FAF7F2",
-              textColor: brand.brandKit?.textColor ?? "#14212B",
-            },
-            content: {
-              businessName: brand.businessName,
-              headline: draft.selectedHook.slice(0, 90),
-              body: post.topic ?? draft.caption?.slice(0, 120),
-              cta: "Save this",
-              badge: brand.niche || brand.businessName,
-            },
-          });
-          const { key, url } = await storage.putObject({
-            body: png,
-            contentType: "image/png",
-            prefix: `workspaces/${workspaceId}/designs`,
-          });
-          const media = await prisma.mediaAsset.create({
-            data: {
-              workspaceId,
-              kind: "GENERATED_IMAGE",
-              source: "RENDER",
-              storageKey: key,
-              url,
-              mimeType: "image/png",
-              byteSize: png.byteLength,
-              width: 1080,
-              height: 1350,
-              altText: draft.altText,
-            },
-          });
-          await prisma.designAsset.create({
-            data: {
-              plannedPostId: post.id,
-              workspaceId,
-              kind: "FEED_PORTRAIT",
-              templateId: family,
-              width: 1080,
-              height: 1350,
-              storageKey: key,
-              url,
-              mediaAssetId: media.id,
-            },
-          });
+
+          const slides =
+            post.format === "CAROUSEL" && Array.isArray(draft.carouselSlides)
+              ? (draft.carouselSlides as Array<{ title?: string; body?: string }>)
+              : [{ title: draft.selectedHook, body: post.topic ?? "" }];
+
+          for (let i = 0; i < slides.length; i++) {
+            const slide = slides[i]!;
+            const png = await renderViaCli({
+              family,
+              size: "FEED_PORTRAIT",
+              brandKit: {
+                primaryColor: brand.brandKit?.primaryColor ?? "#0F3D3E",
+                secondaryColor: brand.brandKit?.secondaryColor ?? "#E8D5B7",
+                accentColor: brand.brandKit?.accentColor ?? "#D97706",
+                backgroundColor: brand.brandKit?.backgroundColor ?? "#FAF7F2",
+                textColor: brand.brandKit?.textColor ?? "#14212B",
+              },
+              content: {
+                businessName: brand.businessName,
+                headline: (slide.title || draft.selectedHook).slice(0, 90),
+                body: slide.body || post.topic || draft.caption?.slice(0, 120),
+                cta: i === slides.length - 1 ? "Save this" : `Slide ${i + 1}`,
+                badge: brand.niche || brand.businessName,
+              },
+            });
+            const { key, url } = await storage.putObject({
+              body: png,
+              contentType: "image/png",
+              prefix: `workspaces/${workspaceId}/designs`,
+            });
+            const media = await prisma.mediaAsset.create({
+              data: {
+                workspaceId,
+                kind: "GENERATED_IMAGE",
+                source: "RENDER",
+                storageKey: key,
+                url,
+                mimeType: "image/png",
+                byteSize: png.byteLength,
+                width: 1080,
+                height: 1350,
+                altText: draft.altText,
+              },
+            });
+            await prisma.designAsset.create({
+              data: {
+                plannedPostId: post.id,
+                workspaceId,
+                kind: "FEED_PORTRAIT",
+                templateId: `${family}:slide:${i + 1}`,
+                width: 1080,
+                height: 1350,
+                storageKey: key,
+                url,
+                mediaAssetId: media.id,
+              },
+            });
+          }
         }
         await markStep(pipelineRunId, step, "completed");
       }
@@ -556,16 +903,29 @@ export async function runWeeklyPipeline(job: PipelineJob) {
               expiresAt: new Date(Date.now() + 7 * 86400000),
             },
           });
-          // token is logged for demo; email/WhatsApp in later polish
-          console.info(
-            `[PostPilot] Approval magic token for workspace ${workspaceId}: ${token}`,
-          );
+          const baseUrl =
+            process.env.NEXT_PUBLIC_APP_URL ||
+            process.env.AUTH_URL ||
+            "http://localhost:3000";
+          const approveUrl = `${baseUrl.replace(/\/$/, "")}/approve/${token}`;
+          const notify = await notifyApprovalLink({
+            approveUrl,
+            workspaceName: brand.businessName,
+            weekTitle: plan.title ?? "this week",
+            channel: process.env.WHATSAPP_TOKEN ? "whatsapp" : undefined,
+          });
+          await markStep(pipelineRunId, step, "completed", {
+            approveUrl,
+            notify,
+            token,
+          });
+        } else {
+          await markStep(pipelineRunId, step, "completed");
         }
         await prisma.workspace.update({
           where: { id: workspaceId },
           data: { onboardingStep: OnboardingStep.COMPLETE },
         });
-        await markStep(pipelineRunId, step, "completed");
       }
     }
 
@@ -669,9 +1029,15 @@ export async function publishPlannedPost(plannedPostId: string) {
     where: { id: plannedPostId },
     include: {
       drafts: { where: { isActive: true }, take: 1 },
-      designAssets: { orderBy: { createdAt: "desc" }, take: 1 },
+      designAssets: { orderBy: { createdAt: "asc" } },
+      approvals: { orderBy: { createdAt: "desc" }, take: 1 },
     },
   });
+
+  if (!["APPROVED", "SCHEDULED", "PUBLISHING"].includes(post.status)) {
+    throw new Error(`Refusing to publish post in status ${post.status}`);
+  }
+
   const account = await prisma.socialAccount.findFirst({
     where: {
       workspaceId: post.workspaceId,
@@ -682,14 +1048,17 @@ export async function publishPlannedPost(plannedPostId: string) {
   if (!account) throw new Error("No social account connected");
 
   const draft = post.drafts[0];
+  const mediaUrls = post.designAssets.map((d) => d.url).filter(Boolean) as string[];
   const result = await publishPost({
     platform: account.platform,
     caption: draft?.caption ?? post.topic ?? "",
-    mediaUrls: post.designAssets[0]?.url ? [post.designAssets[0].url] : [],
+    mediaUrls,
     firstComment: draft?.firstComment ?? undefined,
     idempotencyKey: `publish:${post.id}`,
-    dryRun: true,
+    dryRun: isPublishDryRun(),
+    format: post.format as never,
     externalAccountId: account.externalAccountId,
+    accessToken: account.accessTokenEnc ? "stored" : undefined,
   });
 
   const published = await prisma.publishedPost.create({
@@ -711,7 +1080,6 @@ export async function publishPlannedPost(plannedPostId: string) {
     data: { status: "COMPLETED" },
   });
 
-  // schedule metric pulls
   for (const tp of ["H1", "H24", "H72", "D7"] as const) {
     const delayHrs = tp === "H1" ? 1 : tp === "H24" ? 24 : tp === "H72" ? 72 : 168;
     await prisma.scheduledJob.create({
@@ -759,6 +1127,15 @@ export async function buildWeeklyReport(workspaceId: string) {
     },
     orderBy: { capturedAt: "desc" },
     take: 20,
+    include: {
+      publishedPost: {
+        include: {
+          plannedPost: {
+            include: { drafts: { where: { isActive: true }, take: 1 } },
+          },
+        },
+      },
+    },
   });
   const stage = await prisma.stageReport.findFirst({
     where: { workspaceId },
@@ -768,22 +1145,64 @@ export async function buildWeeklyReport(workspaceId: string) {
     where: { workspaceId, isActive: true },
   });
 
+  const learning = deriveLearningInsights({
+    metrics: metrics.map((m) => ({
+      likes: m.likes,
+      saves: m.saves,
+      comments: m.comments,
+      reach: m.reach,
+      format: m.publishedPost.plannedPost.format,
+      pillar: m.publishedPost.plannedPost.pillar,
+      hook: m.publishedPost.plannedPost.drafts[0]?.selectedHook,
+    })),
+    playbook: playbook
+      ? {
+          winningFormats: playbook.winningFormats as NichePlaybookDoc["winningFormats"],
+          hookPatterns: playbook.hookPatterns as string[],
+          topicClusters: playbook.topicClusters as string[],
+          bestPostingWindows:
+            playbook.bestPostingWindows as NichePlaybookDoc["bestPostingWindows"],
+          trendingThemes: playbook.trendingThemes as string[],
+          contentGaps: playbook.contentGaps as string[],
+          whatChanged: playbook.whatChanged as string[],
+        }
+      : null,
+  });
+
+  // Persist learning into Brand DNA provenHooks + bump playbook note
+  const dna = await prisma.brandDNA.findFirst({
+    where: { workspaceId, isActive: true },
+  });
+  if (dna && learning.provenHooks.length) {
+    const existing = Array.isArray(dna.provenHooks)
+      ? (dna.provenHooks as string[])
+      : [];
+    await prisma.brandDNA.update({
+      where: { id: dna.id },
+      data: {
+        provenHooks: [...learning.provenHooks, ...existing].slice(0, 12),
+      },
+    });
+  }
+  if (playbook) {
+    await prisma.nichePlaybook.update({
+      where: { id: playbook.id },
+      data: {
+        whatChanged: [
+          ...learning.nextWeekChanges,
+          ...((playbook.whatChanged as string[]) ?? []),
+        ].slice(0, 8),
+      },
+    });
+  }
+
   const summary = {
     headline: "Weekly performance snapshot",
     stage: stage?.stage ?? "TRACTION",
     topMetricCount: metrics.length,
     avgLikes:
-      metrics.reduce((a, m) => a + (m.likes ?? 0), 0) /
-      Math.max(metrics.length, 1),
-    whatWorked: [
-      "Save-optimized carousels",
-      "Hooks under 90 characters",
-    ],
-    whatDidnt: ["Generic CTAs without a ritual ask"],
-    nextWeekChanges: [
-      "Increase Reel share per stage mix",
-      "Double down on top pillar",
-    ],
+      metrics.reduce((a, m) => a + (m.likes ?? 0), 0) / Math.max(metrics.length, 1),
+    ...learning,
     competitorMoves: (playbook?.whatChanged as string[]) ?? [],
   };
 

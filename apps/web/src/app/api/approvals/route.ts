@@ -8,6 +8,8 @@ import {
   scheduleApprovedPosts,
   publishPlannedPost,
 } from "@postpilot/jobs";
+import { generatePost } from "@postpilot/ai";
+import type { BrandContext } from "@postpilot/ai";
 
 const bodySchema = z.object({
   workspaceId: z.string(),
@@ -20,9 +22,84 @@ const bodySchema = z.object({
     "reject",
     "schedule",
     "publish_now",
+    "regenerate",
   ]),
   feedback: z.string().max(2000).optional(),
 });
+
+async function brandContextForWorkspace(workspaceId: string): Promise<BrandContext | null> {
+  const brandRow = await prisma.brandProfile.findUnique({ where: { workspaceId } });
+  const kit = await prisma.brandKit.findFirst({
+    where: { workspaceId, isPrimary: true },
+  });
+  if (!brandRow) return null;
+  return {
+    businessName: brandRow.businessName,
+    industry: brandRow.industry ?? undefined,
+    niche: brandRow.niche ?? undefined,
+    usp: brandRow.usp ?? undefined,
+    toneSliders: brandRow.toneSliders as BrandContext["toneSliders"],
+    wordsToUse: brandRow.wordsToUse,
+    wordsToAvoid: brandRow.wordsToAvoid,
+    goals: brandRow.goals,
+    audience: brandRow.audienceJson as BrandContext["audience"],
+    brandKit: kit
+      ? {
+          primaryColor: kit.primaryColor ?? undefined,
+          accentColor: kit.accentColor ?? undefined,
+        }
+      : undefined,
+  };
+}
+
+async function rewritePost(
+  plannedPostId: string,
+  brand: BrandContext,
+  feedback?: string,
+) {
+  const post = await prisma.plannedPost.findUniqueOrThrow({
+    where: { id: plannedPostId },
+  });
+  const generated = await generatePost({
+    brand,
+    platform: post.platforms[0] ?? "INSTAGRAM",
+    format: post.format as never,
+    topic: post.topic ?? undefined,
+    objective: (post.objective as never) ?? "engagement",
+    feedback,
+  });
+  await prisma.postDraft.updateMany({
+    where: { plannedPostId: post.id, isActive: true },
+    data: { isActive: false },
+  });
+  const version =
+    (await prisma.postDraft.count({ where: { plannedPostId: post.id } })) + 1;
+  await prisma.postDraft.create({
+    data: {
+      plannedPostId: post.id,
+      version,
+      isActive: true,
+      selectedHook: generated.selectedHook,
+      hooksJson: generated.hooks,
+      caption: generated.caption,
+      hashtags: generated.hashtags,
+      carouselSlides: generated.slides,
+      reelScript: generated.reelScript,
+      altText: generated.altText,
+      firstComment: generated.hashtags.slice(0, 5).join(" "),
+      qualityScores: generated.qualityScores,
+      qualityPassed: generated.qualityPassed,
+      originalityScore: generated.qualityScores.originality,
+    },
+  });
+  await prisma.plannedPost.update({
+    where: { id: post.id },
+    data: {
+      status: generated.qualityPassed ? "READY" : "CHANGES_REQUESTED",
+    },
+  });
+  return generated;
+}
 
 export async function POST(req: Request) {
   const session = await auth();
@@ -67,10 +144,36 @@ export async function POST(req: Request) {
           feedback: body.feedback,
         },
       });
+      if (body.feedback) {
+        await prisma.comment.create({
+          data: {
+            plannedPostId: body.plannedPostId,
+            authorUserId: session.user.id,
+            body: body.feedback,
+          },
+        });
+      }
       await prisma.plannedPost.update({
         where: { id: body.plannedPostId },
         data: { status: "CHANGES_REQUESTED" },
       });
+      const brand = await brandContextForWorkspace(body.workspaceId);
+      if (brand) {
+        await rewritePost(body.plannedPostId, brand, body.feedback);
+      }
+      return NextResponse.json({ ok: true });
+    }
+
+    if (body.action === "regenerate" && body.plannedPostId) {
+      const brand = await brandContextForWorkspace(body.workspaceId);
+      if (!brand) {
+        return NextResponse.json({ error: "Brand missing" }, { status: 400 });
+      }
+      const last = await prisma.approval.findFirst({
+        where: { plannedPostId: body.plannedPostId },
+        orderBy: { createdAt: "desc" },
+      });
+      await rewritePost(body.plannedPostId, brand, last?.feedback ?? undefined);
       return NextResponse.json({ ok: true });
     }
 
@@ -100,7 +203,6 @@ export async function POST(req: Request) {
     }
 
     if (body.action === "publish_now" && body.plannedPostId) {
-      // Force approve if needed
       const post = await prisma.plannedPost.findUniqueOrThrow({
         where: { id: body.plannedPostId },
       });

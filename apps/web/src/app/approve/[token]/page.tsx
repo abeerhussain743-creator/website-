@@ -3,6 +3,7 @@ import { prisma } from "@postpilot/db";
 import { approvePlannedPost, scheduleApprovedPosts } from "@postpilot/jobs";
 import { Button } from "@/components/ui/button";
 import { notFound } from "next/navigation";
+import type { CSSProperties } from "react";
 
 async function approveWeek(token: string, contentPlanId: string, workspaceId: string) {
   "use server";
@@ -29,6 +30,18 @@ async function approveWeek(token: string, contentPlanId: string, workspaceId: st
   });
 }
 
+async function approveOne(token: string, plannedPostId: string) {
+  "use server";
+  const tokenHash = createHash("sha256").update(token).digest("hex");
+  const link = await prisma.approvalMagicLink.findUnique({
+    where: { tokenHash },
+  });
+  if (!link || link.expiresAt < new Date() || link.usedAt) {
+    throw new Error("Link expired");
+  }
+  await approvePlannedPost({ plannedPostId, channel: "MAGIC_LINK" });
+}
+
 export default async function MagicApprovePage({
   params,
 }: {
@@ -50,17 +63,25 @@ export default async function MagicApprovePage({
           designAssets: { take: 1, orderBy: { createdAt: "desc" } },
         },
       },
-      workspace: true,
+      workspace: { include: { organization: true } },
     },
   });
   if (!plan) notFound();
   const expired = link.expiresAt < new Date();
   const used = Boolean(link.usedAt);
+  const org = plan.workspace.organization;
+  const accent = org.whiteLabelColor || undefined;
+  const brandName = org.whiteLabelLogo ? org.name : "PostPilot";
 
   return (
-    <div className="min-h-screen bg-app-grain px-4 py-10">
+    <div
+      className="min-h-screen bg-app-grain px-4 py-10"
+      style={accent ? ({ ["--ember-500" as string]: accent } as CSSProperties) : undefined}
+    >
       <div className="mx-auto max-w-lg">
-        <p className="font-display text-3xl">PostPilot</p>
+        <p className="font-display text-3xl" style={accent ? { color: accent } : undefined}>
+          {brandName}
+        </p>
         <h1 className="mt-2 text-xl font-medium">Approve this week</h1>
         <p className="mt-1 text-sm text-[var(--muted)]">
           {plan.workspace.name} · {plan.title}
@@ -86,7 +107,7 @@ export default async function MagicApprovePage({
               className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4"
             >
               <p className="text-xs text-[var(--muted)]">
-                Day {p.dayIndex + 1} · {p.format}
+                Day {p.dayIndex + 1} · {p.format} · {p.status}
               </p>
               <p className="font-medium">{p.topic}</p>
               {p.designAssets[0]?.url ? (
@@ -100,6 +121,13 @@ export default async function MagicApprovePage({
               <p className="mt-2 text-sm text-[var(--muted)]">
                 {p.drafts[0]?.selectedHook}
               </p>
+              {!expired && !used && ["READY", "CHANGES_REQUESTED"].includes(p.status) ? (
+                <form className="mt-3" action={approveOne.bind(null, token, p.id)}>
+                  <Button type="submit" size="sm" variant="secondary">
+                    Approve this post
+                  </Button>
+                </form>
+              ) : null}
             </div>
           ))}
         </div>

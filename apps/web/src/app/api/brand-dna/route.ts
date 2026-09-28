@@ -3,11 +3,17 @@ import { z } from "zod";
 import { auth } from "@/auth";
 import { assertWorkspaceAccess, WorkspaceAccessError } from "@/lib/access";
 import { prisma } from "@postpilot/db";
-import { generateBrandDna, type BrandContext } from "@postpilot/ai";
+import {
+  generateBrandDna,
+  ingestWebsite,
+  getLlmAdapter,
+  type BrandContext,
+} from "@postpilot/ai";
 
 const bodySchema = z.object({
   workspaceId: z.string(),
   rawDocument: z.string().max(20000).optional(),
+  scrapeWebsite: z.boolean().optional().default(true),
 });
 
 export async function POST(req: Request) {
@@ -49,8 +55,25 @@ export async function POST(req: Request) {
           }
         : undefined,
     };
-    const dna = generateBrandDna(ctx);
+
+    const website =
+      body.scrapeWebsite && brand.websiteUrl
+        ? await ingestWebsite({
+            url: brand.websiteUrl,
+            businessName: brand.businessName,
+          })
+        : undefined;
+
+    const adapter = await getLlmAdapter();
+    const result = adapter.generateBrandDna
+      ? await adapter.generateBrandDna({ brand: ctx, website })
+      : {
+          dna: generateBrandDna(ctx),
+          cost: { provider: "local", model: "local-brand-dna", costUsd: 0 },
+        };
+    const dna = result.dna;
     if (body.rawDocument) dna.rawDocument = body.rawDocument;
+
     const latest = await prisma.brandDNA.findFirst({
       where: { workspaceId: body.workspaceId },
       orderBy: { version: "desc" },
@@ -77,13 +100,24 @@ export async function POST(req: Request) {
     await prisma.aICallLog.create({
       data: {
         workspaceId: body.workspaceId,
-        provider: "OTHER",
+        provider:
+          result.cost.provider === "anthropic"
+            ? "ANTHROPIC"
+            : result.cost.provider === "openai"
+              ? "OPENAI"
+              : "OTHER",
         kind: "BRAND_DNA",
-        model: "local-brand-dna",
+        model: result.cost.model,
         success: true,
+        inputTokens: result.cost.inputTokens,
+        outputTokens: result.cost.outputTokens,
+        costUsdCents: result.cost.costUsd
+          ? Math.round(result.cost.costUsd * 100)
+          : 0,
+        metaJson: website ? { websiteSource: website.source, url: website.url } : {},
       },
     });
-    return NextResponse.json({ dna: saved });
+    return NextResponse.json({ dna: saved, website });
   } catch (err) {
     if (err instanceof WorkspaceAccessError) {
       return NextResponse.json({ error: err.message }, { status: err.status });
