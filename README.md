@@ -1,71 +1,58 @@
-# ShopData
+# PostPilot AI
 
-Shopify data management SaaS — import, export, and bulk-update store data with spreadsheet-friendly workflows.
+Premium autonomous social media content system.
 
-## Architecture
+Positioning: **Your AI social media team — strategist, copywriter, designer, and scheduler in one.**
 
-See [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) for the full system design (product, schema, pipelines, security, roadmap).
+## Phase 1 (this release)
 
-## Stack
-
-- **Web:** Next.js · React · TypeScript · Tailwind
-- **Workers:** Node.js · BullMQ · Redis
-- **DB:** PostgreSQL · Prisma
-- **Files:** S3-compatible (MinIO locally)
-- **Shopify:** Admin GraphQL + Bulk Operations · OAuth
+Monorepo foundation, Postgres schema (pgvector-ready), Auth.js, organizations/workspaces/roles, onboarding wizard, brand kit upload, app shell, worker ping consumer, CI.
 
 ## Quick start
 
 ```bash
-# 1. Infrastructure
 cp .env.example .env
 docker compose up -d
-
-# 2. Install & DB
-npm install
-npm run db:generate
-npm run db:push
-npm run db:seed
-npm run db:seed:demo
-
-# 3. App
-npm run dev
-
-# 4. Worker (separate terminal)
-npm run dev:worker
+pnpm install
+pnpm db:generate && pnpm db:push && pnpm db:seed
+pnpm dev
 ```
 
-Web: http://localhost:3000
+- Web: http://localhost:3000  
+- Dev login: `demo@postpilot.ai` (requires `AUTH_DEV_LOGIN=true`)  
+- Worker runs alongside web via `pnpm dev`
 
-## MVP scope
+## Stack
 
-- Shopify OAuth + store connection (demo seed supported)
-- Dashboard
-- Product import (CSV / XLSX) with field mapping, validation, preview
-- Product export (CSV / XLSX) via Bulk Operations
-- Product bulk update (price / compare-at / inventory / status / tags)
-- Background jobs, progress, error reports, retry failed rows
-- Local disk or S3/MinIO artifact storage
-- Dry-run mode for demo tokens / `SHOPDATA_DRY_RUN=true`
+| Layer | Choice |
+|-------|--------|
+| Monorepo | Turborepo + pnpm |
+| Web | Next.js App Router, Tailwind, Framer Motion |
+| Auth | Auth.js (magic link + Google + local dev login) |
+| DB | PostgreSQL + Prisma + pgvector |
+| Queue | Redis + BullMQ |
+| Storage | S3-compatible (MinIO locally / R2 in prod) |
 
-## Workspaces
+## Workspace map
 
-| Path | Package |
-|------|---------|
-| `apps/web` | Next.js UI + API |
-| `apps/worker` | Job workers |
-| `packages/db` | Prisma schema |
-| `packages/shared` | Shared types/utils |
-| `packages/shopify` | OAuth + GraphQL client |
-| `packages/files` | Parse / map / validate / XLSX |
-| `packages/jobs` | Queue producers/consumers |
-| `packages/storage` | Local disk / S3 object storage |
+See `docs/FOLDER_STRUCTURE.md` and `docs/ARCHITECTURE.md`.
 
-## Demo
+## Scripts
 
-```bash
-npm run db:seed:demo
-# Then open http://localhost:3000/app/stores and use the Demo Store.
-# Imports/exports/bulk-updates run in dry-run mode for the demo token.
-```
+| Command | Purpose |
+|---------|---------|
+| `pnpm dev` | Web + worker |
+| `pnpm db:push` | Sync Prisma schema |
+| `pnpm db:seed` | Demo org/workspace |
+| `pnpm lint` / `typecheck` / `test` | CI checks |
 
+## Docs
+
+- `docs/PRODUCT_SPEC.md`
+- `docs/ARCHITECTURE.md`
+- `docs/DECISIONS.md`
+- `docs/PHASE1_PROPOSAL.md`
+
+## Phase gate
+
+After Phase 1 review, continue with Phase 2 (Brand DNA + LLM adapters).

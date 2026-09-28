@@ -1,49 +1,80 @@
-export default function SettingsPage() {
+import { requireSession, getUserMemberships } from "@/lib/access";
+import { getPrimaryWorkspaceForUser } from "@/lib/tenancy";
+import { prisma } from "@postpilot/db";
+
+export default async function SettingsPage() {
+  const session = await requireSession();
+  const workspace = await getPrimaryWorkspaceForUser(session.user.id);
+  const memberships = await getUserMemberships(session.user.id);
+  const subscription = await prisma.subscription.findUnique({
+    where: { organizationId: workspace.organizationId },
+  });
+
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
-      <header>
-        <h1 className="font-display text-3xl font-bold">Settings</h1>
-        <p className="mt-1 text-ink-500">
-          Runtime configuration for this ShopData environment.
+    <div className="space-y-8">
+      <div>
+        <h1 className="font-display text-4xl tracking-tight">Settings</h1>
+        <p className="mt-2 text-sm text-[var(--muted)]">
+          Organization, roles, and plan limits for Phase 1.
         </p>
-      </header>
+      </div>
 
-      <section className="rounded-2xl border border-ink-100 bg-white/80 p-5 shadow-soft">
-        <h2 className="text-lg font-semibold">Environment</h2>
-        <ul className="mt-3 space-y-2 text-sm text-ink-500">
-          <li>
-            Copy <code>.env.example</code> → <code>.env</code> and fill Shopify
-            app credentials for live stores.
-          </li>
-          <li>
-            Leave <code>S3_ENDPOINT</code> empty to store uploads/exports on
-            local disk (<code>STORAGE_ROOT</code>).
-          </li>
-          <li>
-            Set <code>SHOPDATA_DRY_RUN=true</code> (or use the seeded demo store)
-            to exercise jobs without writing to Shopify.
-          </li>
-          <li>
-            Access tokens are encrypted at rest and never sent to the browser.
-          </li>
+      <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5">
+        <h2 className="font-medium">Workspace</h2>
+        <dl className="mt-4 space-y-2 text-sm">
+          <Row label="Name" value={workspace.name} />
+          <Row label="Slug" value={workspace.slug} />
+          <Row label="Timezone" value={workspace.timezone} />
+          <Row
+            label="Languages"
+            value={workspace.contentLanguages.join(", ")}
+          />
+          <Row label="Auto-approve" value={workspace.autoApprove ? "On" : "Off"} />
+        </dl>
+      </section>
+
+      <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5">
+        <h2 className="font-medium">Memberships</h2>
+        <ul className="mt-4 space-y-2 text-sm">
+          {memberships.map((m) => (
+            <li
+              key={m.id}
+              className="flex items-center justify-between rounded-xl border border-[var(--border)] px-3 py-2"
+            >
+              <span>{m.organization.name}</span>
+              <span className="text-[var(--muted)]">{m.role}</span>
+            </li>
+          ))}
         </ul>
       </section>
 
-      <section className="rounded-2xl border border-ink-100 bg-white/80 p-5 shadow-soft">
-        <h2 className="text-lg font-semibold">MVP checklist</h2>
-        <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-ink-500">
-          <li>Connect store (OAuth or demo seed)</li>
-          <li>Import products (CSV / XLSX)</li>
-          <li>Export products (CSV / XLSX)</li>
-          <li>Bulk update prices, inventory, status, or tags</li>
-          <li>Monitor jobs, download errors, retry failed rows</li>
-        </ul>
+      <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5">
+        <h2 className="font-medium">Plan</h2>
+        <dl className="mt-4 space-y-2 text-sm">
+          <Row label="Code" value={subscription?.planCode ?? "STARTER"} />
+          <Row label="Status" value={subscription?.status ?? "TRIALING"} />
+          <Row
+            label="Credits"
+            value={String(subscription?.creditBalance ?? 0)}
+          />
+          <Row
+            label="Brand limit"
+            value={String(subscription?.brandLimit ?? 1)}
+          />
+        </dl>
+        <p className="mt-4 text-xs text-[var(--muted)]">
+          Stripe billing ships in Phase 10.
+        </p>
       </section>
+    </div>
+  );
+}
 
-      <section className="rounded-2xl border border-ink-100 bg-white/80 p-5 text-sm text-ink-500 shadow-soft">
-        Billing, teams/RBAC, scheduling, and multi-resource datasets are planned
-        for later phases — see <code>docs/ARCHITECTURE.md</code>.
-      </section>
+function Row({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex justify-between gap-4">
+      <dt className="text-[var(--muted)]">{label}</dt>
+      <dd className="font-medium">{value}</dd>
     </div>
   );
 }

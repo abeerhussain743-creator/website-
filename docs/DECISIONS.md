@@ -8,21 +8,21 @@ Format: ADR-lite. Newest first within each phase.
 
 ### ADR-001: Greenfield PostPilot in this repository
 
-**Status:** Proposed  
+**Status:** Accepted  
 **Context:** The repo currently contains a ShopData (Shopify ops) MVP on branch `cursor/shopdata-mvp-complete-afa8`. PostPilot is a different product with a different package topology (Turborepo + pnpm, `ai` / `social` / `design` / `scraper`).  
 **Decision:** Treat PostPilot as a **greenfield replace** of the ShopData tree on a new feature branch. Do not try to share ShopData packages. ShopData history remains on its branch.  
 **Consequences:** Clean monorepo matching the product spec; ShopData code is not carried forward on the PostPilot branch.
 
 ### ADR-002: Auth.js (Auth.js / NextAuth v5) over Clerk
 
-**Status:** Proposed  
+**Status:** Accepted  
 **Context:** Spec allows Auth.js or Clerk. Clerk is a paid third-party SaaS.  
 **Decision:** Use **Auth.js** with email magic link + Google OAuth. Organizations/workspaces/roles live in our Postgres schema.  
 **Consequences:** More setup for sessions and OAuth callbacks; no Clerk billing dependency; aligns with “ask before adding unpaid-listed paid services.”
 
 ### ADR-003: Turborepo + pnpm (replace npm workspaces)
 
-**Status:** Proposed  
+**Status:** Accepted  
 **Context:** Spec mandates Turborepo + pnpm. Existing ShopData used npm workspaces.  
 **Decision:** Adopt `pnpm-workspace.yaml` + `turbo.json`. Package names `@postpilot/*`.  
 **Consequences:** Requires Corepack/`pnpm` in CI and local README.
@@ -71,10 +71,16 @@ Format: ADR-lite. Newest first within each phase.
 
 ---
 
-## Open questions for owner (non-blocking for schema review)
+### ADR-010: Local disk storage driver for Phase 1
 
-1. Confirm greenfield replace of ShopData on this repo (ADR-001).
-2. Confirm Auth.js over Clerk (ADR-002).
-3. Preferred hosted Postgres for prod docs: Neon vs Supabase (schema is identical either way).
-4. Embedding dimensions: default **1536** (OpenAI `text-embedding-3-small`) unless you prefer Anthropic/Voyage — changeable via constant.
-5. Confirm one Membership per user per org (ADR-009) vs multi-workspace Client-Approver rows.
+**Status:** Accepted  
+**Context:** Docker/MinIO may be unavailable in some agent environments; uploads are still required for brand kit logos.  
+**Decision:** `@postpilot/storage` supports `STORAGE_DRIVER=local` (default when S3 keys are empty) served via `GET /media/[...path]`. Docker Compose still documents MinIO for full local parity.  
+**Consequences:** Zero-deps local demo; production uses R2/S3.
+
+---
+
+## Phase 1 implementation notes
+
+Phase 1 foundation implemented after schema approval: monorepo, auth, tenancy, onboarding, brand kit, UI shell, CI, worker ping consumer, scraper health stub.
+
