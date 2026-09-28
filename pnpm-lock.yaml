@@ -232,9 +232,6 @@ importers:
       '@postpilot/db':
         specifier: workspace:^
         version: link:../db
-      '@postpilot/design':
-        specifier: workspace:^
-        version: link:../design
       '@postpilot/shared':
         specifier: workspace:^
         version: link:../shared

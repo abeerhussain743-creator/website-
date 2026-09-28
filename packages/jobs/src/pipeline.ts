@@ -9,7 +9,6 @@ import {
   type BrandContext,
 } from "@postpilot/ai";
 import { publishPost, simulateMetrics } from "@postpilot/social";
-import { renderPostPng } from "@postpilot/design";
 import { storageFromEnv } from "@postpilot/storage";
 import { PIPELINE_STEPS, type PipelineJob } from "./index.js";
 import { mkdtemp, writeFile, readFile, rm } from "node:fs/promises";
@@ -804,6 +803,3 @@ export async function buildWeeklyReport(workspaceId: string) {
     update: { summaryJson: summary },
   });
 }
-
-// silence unused import when renderPostPng only used conceptually
-void renderPostPng;

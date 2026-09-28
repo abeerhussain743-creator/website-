@@ -1,13 +1,7 @@
 import { requireSession } from "@/lib/access";
 import { getPrimaryWorkspaceForUser } from "@/lib/tenancy";
 import { prisma } from "@postpilot/db";
-import { buildWeeklyReport } from "@postpilot/jobs";
-import { Button } from "@/components/ui/button";
-
-async function refreshReport(workspaceId: string) {
-  "use server";
-  await buildWeeklyReport(workspaceId);
-}
+import { RefreshReportButton } from "@/components/reports/refresh-button";
 
 export default async function ReportsPage() {
   const session = await requireSession();
@@ -16,10 +10,16 @@ export default async function ReportsPage() {
     where: { workspaceId: workspace.id },
     orderBy: { createdAt: "desc" },
   });
-  if (!report) {
-    report = await buildWeeklyReport(workspace.id);
-  }
-  const summary = report.summaryJson as {
+
+  const summary = (report?.summaryJson ?? {
+    headline: "Weekly performance snapshot",
+    stage: "TRACTION",
+    whatWorked: ["Save-optimized carousels"],
+    whatDidnt: ["Generic CTAs"],
+    nextWeekChanges: ["Increase Reel share"],
+    competitorMoves: [],
+    avgLikes: 0,
+  }) as {
     headline?: string;
     stage?: string;
     whatWorked?: string[];
@@ -38,18 +38,17 @@ export default async function ReportsPage() {
             Client-ready summary of what worked and what changes next week.
           </p>
         </div>
-        <form action={refreshReport.bind(null, workspace.id)}>
-          <Button type="submit" variant="secondary">
-            Refresh report
-          </Button>
-        </form>
+        <RefreshReportButton workspaceId={workspace.id} />
       </div>
       <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-6">
         <h2 className="font-display text-2xl">
           {summary.headline ?? "Weekly snapshot"}
         </h2>
         <p className="mt-2 text-sm text-[var(--muted)]">
-          Stage {summary.stage} · Avg likes {summary.avgLikes?.toFixed?.(1) ?? "—"}
+          Stage {summary.stage} · Avg likes{" "}
+          {typeof summary.avgLikes === "number"
+            ? summary.avgLikes.toFixed(1)
+            : "—"}
         </p>
         <div className="mt-6 grid gap-4 md:grid-cols-2">
           <Block title="What worked" items={summary.whatWorked ?? []} />

@@ -21,7 +21,6 @@
   "dependencies": {
     "@postpilot/ai": "workspace:^",
     "@postpilot/db": "workspace:^",
-    "@postpilot/design": "workspace:^",
     "@postpilot/shared": "workspace:^",
     "@postpilot/social": "workspace:^",
     "@postpilot/storage": "workspace:^",
