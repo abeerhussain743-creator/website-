@@ -3,6 +3,7 @@ import { getPrimaryWorkspaceForUser } from "@/lib/tenancy";
 import { prisma } from "@postpilot/db";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { RegenerateDnaButton } from "@/components/brand/regenerate-dna";
 
 export default async function BrandPage() {
   const session = await requireSession();
@@ -28,9 +29,12 @@ export default async function BrandPage() {
             Profile, kit, and DNA for this workspace.
           </p>
         </div>
-        <Link href="/app/onboarding">
-          <Button variant="secondary">Edit via onboarding</Button>
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          <RegenerateDnaButton workspaceId={workspace.id} />
+          <Link href="/app/onboarding">
+            <Button variant="secondary">Edit via onboarding</Button>
+          </Link>
+        </div>
       </div>
 
       <section className="grid gap-4 md:grid-cols-2">
@@ -70,16 +74,6 @@ export default async function BrandPage() {
               <p className="text-sm text-[var(--muted)]">
                 {kit.fontHeading} / {kit.fontBody}
               </p>
-              {kit.logo?.url ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={kit.logo.url}
-                  alt="Logo"
-                  className="mt-2 h-14 w-auto rounded-lg border border-[var(--border)] bg-white p-2"
-                />
-              ) : (
-                <p className="text-sm text-[var(--muted)]">No logo uploaded</p>
-              )}
             </div>
           ) : (
             <p className="mt-4 text-sm text-[var(--muted)]">No kit yet.</p>
@@ -88,15 +82,14 @@ export default async function BrandPage() {
       </section>
 
       <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5">
-        <h2 className="font-medium">Brand DNA</h2>
+        <h2 className="font-medium">Brand DNA {dna ? `v${dna.version}` : ""}</h2>
         {dna ? (
-          <p className="mt-3 whitespace-pre-wrap text-sm text-[var(--muted)]">
+          <pre className="mt-3 whitespace-pre-wrap text-sm text-[var(--muted)]">
             {dna.rawDocument ?? "Versioned DNA document is present."}
-          </p>
+          </pre>
         ) : (
           <p className="mt-3 text-sm text-[var(--muted)]">
-            AI Brand DNA generation arrives in Phase 2. Demo workspaces may
-            include a seeded draft.
+            Generate Brand DNA to lock voice rules, pillars, and visual guidance.
           </p>
         )}
       </section>

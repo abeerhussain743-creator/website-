@@ -41,9 +41,15 @@ importers:
       '@postpilot/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@postpilot/social':
+        specifier: workspace:^
+        version: link:../../packages/social
       '@postpilot/storage':
         specifier: workspace:*
         version: link:../../packages/storage
+      bullmq:
+        specifier: ^5.34.5
+        version: 5.81.5
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
@@ -220,8 +226,26 @@ importers:
 
   packages/jobs:
     dependencies:
+      '@postpilot/ai':
+        specifier: workspace:^
+        version: link:../ai
+      '@postpilot/db':
+        specifier: workspace:^
+        version: link:../db
+      '@postpilot/design':
+        specifier: workspace:^
+        version: link:../design
+      '@postpilot/shared':
+        specifier: workspace:^
+        version: link:../shared
+      '@postpilot/social':
+        specifier: workspace:^
+        version: link:../social
+      '@postpilot/storage':
+        specifier: workspace:^
+        version: link:../storage
       bullmq:
-        specifier: ^5.34.5
+        specifier: ^5.81.5
         version: 5.81.5
       zod:
         specifier: ^3.24.1
@@ -260,13 +284,26 @@ importers:
         version: 2.1.9(@types/node@22.20.4)
 
   packages/social:
+    dependencies:
+      '@postpilot/shared':
+        specifier: workspace:*
+        version: link:../shared
+      zod:
+        specifier: ^3.24.1
+        version: 3.25.76
     devDependencies:
       '@postpilot/typescript-config':
         specifier: workspace:*
         version: link:../../tooling/typescript
+      '@types/node':
+        specifier: ^22.10.2
+        version: 22.20.4
       typescript:
         specifier: ^5.7.2
         version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.4)
 
   packages/storage:
     dependencies:

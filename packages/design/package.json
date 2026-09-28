@@ -8,11 +8,13 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
     },
     "./catalog": {
       "types": "./dist/catalog.d.ts",
-      "import": "./dist/catalog.js"
+      "import": "./dist/catalog.js",
+      "default": "./dist/catalog.js"
     }
   },
   "scripts": {

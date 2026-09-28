@@ -8,9 +8,16 @@ import { Button } from "@/components/ui/button";
 const nav = [
   { href: "/app", label: "Dashboard" },
   { href: "/app/studio", label: "Design Studio" },
-  { href: "/app/onboarding", label: "Onboarding" },
+  { href: "/app/calendar", label: "Calendar" },
+  { href: "/app/review", label: "Review Board" },
+  { href: "/app/competitors", label: "Competitors" },
+  { href: "/app/stage", label: "Account Stage" },
+  { href: "/app/analytics", label: "Analytics" },
+  { href: "/app/reports", label: "Weekly Report" },
   { href: "/app/brand", label: "Brand" },
+  { href: "/app/onboarding", label: "Onboarding" },
   { href: "/app/settings", label: "Settings" },
+  { href: "/app/admin", label: "Admin" },
 ];
 
 export default async function AppLayout({

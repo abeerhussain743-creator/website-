@@ -11,6 +11,7 @@ const nextConfig = {
     "@postpilot/storage",
     "@postpilot/jobs",
     "@postpilot/ai",
+    "@postpilot/social",
   ],
   experimental: {
     serverComponentsExternalPackages: ["@postpilot/design"],
