@@ -1,26 +1,188 @@
+// PostPilot AI — Prisma schema (Phase 1 proposal)
+// Owner: approve before remaining Phase 1 implementation.
+// PostgreSQL + pgvector. Embedding columns use Unsupported("vector").
+
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [vector, pg_trgm]
 }
+
+// ─── Enums ───────────────────────────────────────────────────────────────────
 
 enum MembershipRole {
   OWNER
   ADMIN
-  MANAGER
-  OPERATOR
-  VIEWER
+  EDITOR
+  CLIENT_APPROVER
+}
+
+enum Platform {
+  INSTAGRAM
+  FACEBOOK
+  LINKEDIN
+  X
+  TIKTOK
+}
+
+enum SocialAccountStatus {
+  CONNECTED
+  NEEDS_RECONNECT
+  DISCONNECTED
+  ERROR
+}
+
+enum PostFormat {
+  SINGLE_IMAGE
+  CAROUSEL
+  REEL
+  STORY
+  TEXT
+  VIDEO
+}
+
+enum ContentPillar {
+  EDUCATIONAL
+  ENTERTAINMENT
+  BEHIND_THE_SCENES
+  TESTIMONIAL
+  PRODUCT
+  PROMOTIONAL
+  COMMUNITY
+  THOUGHT_LEADERSHIP
+  UGC
+  TREND
+  OTHER
+}
+
+enum AccountStage {
+  LAUNCH
+  TRACTION
+  GROWTH
+  AUTHORITY
+}
+
+enum CompetitorTier {
+  RISING_STAR
+  CATEGORY_LEADER
+  DIRECT_RIVAL
+  WATCHLIST
+}
+
+enum CompetitorSource {
+  LLM
+  MANUAL
+  SEARCH
+  PLATFORM_SEARCH
+  AD_LIBRARY
+}
+
+enum ContentPlanStatus {
+  DRAFT
+  GENERATING
+  READY_FOR_REVIEW
+  PARTIALLY_APPROVED
+  APPROVED
+  SCHEDULED
+  PUBLISHING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum PlannedPostStatus {
+  PLANNED
+  GENERATING
+  READY
+  CHANGES_REQUESTED
+  APPROVED
+  REJECTED
+  SCHEDULED
+  PUBLISHING
+  PUBLISHED
+  FAILED
+  SKIPPED
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  CHANGES_REQUESTED
+  REJECTED
+}
+
+enum ApprovalChannel {
+  DASHBOARD
+  MAGIC_LINK
+  EMAIL
+  WHATSAPP
+  AUTO
+}
+
+enum DesignAssetKind {
+  FEED_SQUARE
+  FEED_PORTRAIT
+  STORY
+  REEL_COVER
+  CAROUSEL_SLIDE
+  LINK_PREVIEW
+  OTHER
+}
+
+enum MediaAssetKind {
+  LOGO
+  PHOTO
+  GENERATED_IMAGE
+  FONT
+  VIDEO
+  AUDIO
+  OTHER
+}
+
+enum MediaSource {
+  UPLOAD
+  WEBSITE_SCRAPE
+  AI_GENERATED
+  STOCK
+  RENDER
+}
+
+enum ScheduledJobKind {
+  PUBLISH_POST
+  PULL_METRICS
+  REFRESH_COMPETITORS
+  WEEKLY_PIPELINE
+  REMIND_APPROVAL
+  TOKEN_REFRESH
+  OTHER
+}
+
+enum ScheduledJobStatus {
+  PENDING
+  ACTIVE
+  COMPLETED
+  FAILED
+  CANCELLED
+  DEAD_LETTER
+}
+
+enum MetricTimepoint {
+  H1
+  H24
+  H72
+  D7
+  CUSTOM
 }
 
 enum PlanCode {
-  FREE
   STARTER
-  GROWTH
   PRO
-  ENTERPRISE
+  AGENCY
 }
 
 enum SubscriptionStatus {
@@ -28,449 +190,960 @@ enum SubscriptionStatus {
   ACTIVE
   PAST_DUE
   CANCELLED
+  INCOMPLETE
 }
 
-enum JobType {
-  PRODUCT_IMPORT
-  PRODUCT_EXPORT
-  PRODUCT_BULK_UPDATE
+enum CreditLedgerReason {
+  GRANT
+  GENERATION
+  IMAGE
+  SCRAPE
+  REFUND
+  ADJUSTMENT
+  PERIOD_RESET
 }
 
-enum JobStatus {
+enum AIProvider {
+  ANTHROPIC
+  OPENAI
+  FAL
+  REPLICATE
+  OTHER
+}
+
+enum AICallKind {
+  STRATEGY
+  COPY
+  CRITIC
+  BRAND_DNA
+  CLASSIFY
+  EMBEDDING
+  IMAGE
+  REPORT
+  OTHER
+}
+
+enum PipelineStep {
+  REFRESH_COMPETITORS
+  ANALYZE_COMPETITOR_POSTS
+  UPDATE_NICHE_PLAYBOOK
+  SYNC_OWN_ACCOUNT_METRICS
+  DIAGNOSE_STAGE
+  BUILD_WEEKLY_PLAN
+  GENERATE_POSTS
+  QUALITY_CRITIC
+  RENDER_DESIGNS
+  NOTIFY_FOR_APPROVAL
+  SCHEDULE_PUBLISH
+  PUBLISH_POST
+  PULL_METRICS
+  UPDATE_PERFORMANCE
+}
+
+enum PipelineRunStatus {
   QUEUED
-  VALIDATING
-  PROCESSING
+  RUNNING
+  PAUSED
   COMPLETED
-  PARTIALLY_COMPLETED
   FAILED
   CANCELLED
 }
 
-enum Dataset {
-  PRODUCTS
+enum OnboardingStep {
+  BUSINESS
+  AUDIENCE
+  TONE
+  BRAND_KIT
+  SOCIAL
+  REVIEW
+  COMPLETE
 }
 
-enum FileKind {
-  UPLOAD
-  EXPORT
-  ERROR_REPORT
-  BACKUP
-  TEMPLATE
+enum HookType {
+  QUESTION
+  BOLD_CLAIM
+  STAT
+  STORY
+  CONTRARIAN
+  HOW_TO
+  LIST
+  PAIN
+  CURIOSITY
+  OTHER
 }
 
-enum JobRecordStatus {
-  PENDING
-  SUCCESS
-  FAILED
-  SKIPPED
+enum CtaType {
+  COMMENT
+  SAVE
+  SHARE
+  LINK_IN_BIO
+  DM
+  FOLLOW
+  SHOP
+  SIGN_UP
+  NONE
+  OTHER
 }
 
-model Organization {
-  id        String   @id @default(uuid()) @db.Uuid
-  name      String
-  slug      String   @unique
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  memberships   Membership[]
-  stores        Store[]
-  subscription  Subscription?
-  usageRecords  UsageRecord[]
-  jobs          Job[]
-  files         FileObject[]
-  templates     Template[]
-  fieldMappings FieldMapping[]
-  auditLogs     AuditLog[]
-  notifications Notification[]
-  scheduledJobs ScheduledJob[]
-  backups       Backup[]
-
-  @@map("organizations")
-}
+// ─── Auth.js (Auth.js / NextAuth v5) ──────────────────────────────────────────
 
 model User {
-  id            String   @id @default(uuid()) @db.Uuid
-  email         String   @unique
+  id            String    @id @default(cuid())
   name          String?
-  shopifyUserId String?  @map("shopify_user_id")
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
+  email         String    @unique
+  emailVerified DateTime? @map("email_verified")
+  image         String?
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+  deletedAt     DateTime? @map("deleted_at")
 
-  memberships   Membership[]
-  jobs          Job[]        @relation("JobCreator")
-  auditLogs     AuditLog[]
-  notifications Notification[]
+  accounts          Account[]
+  sessions          Session[]
+  memberships       Membership[]
+  comments          Comment[]
+  approvals         Approval[]
+  auditLogs         AuditLog[]
+  createdPlans      ContentPlan[]      @relation("ContentPlanCreator")
+  createdDrafts     PostDraft[]        @relation("PostDraftCreator")
+  uploadedMedia     MediaAsset[]       @relation("MediaUploader")
+  pipelineRuns      PipelineRun[]      @relation("PipelineRunTriggeredBy")
 
+  @@index([deletedAt])
   @@map("users")
 }
 
+model Account {
+  id                String  @id @default(cuid())
+  userId            String  @map("user_id")
+  type              String
+  provider          String
+  providerAccountId String  @map("provider_account_id")
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique @map("session_token")
+  userId       String   @map("user_id")
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+// ─── Tenancy ─────────────────────────────────────────────────────────────────
+
+model Organization {
+  id             String   @id @default(cuid())
+  name           String
+  slug           String   @unique
+  /// Agency white-label (Phase 10)
+  whiteLabelLogo String?  @map("white_label_logo")
+  whiteLabelColor String? @map("white_label_color")
+  customDomain   String?  @map("custom_domain")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+  deletedAt      DateTime? @map("deleted_at")
+
+  memberships  Membership[]
+  workspaces   Workspace[]
+  subscription Subscription?
+  auditLogs    AuditLog[]
+  featureFlags FeatureFlag[]
+
+  @@index([deletedAt])
+  @@map("organizations")
+}
+
 model Membership {
-  id             String         @id @default(uuid()) @db.Uuid
-  organizationId String         @map("organization_id") @db.Uuid
-  userId         String         @map("user_id") @db.Uuid
-  role           MembershipRole @default(OPERATOR)
+  id             String         @id @default(cuid())
+  organizationId String         @map("organization_id")
+  userId         String         @map("user_id")
+  role           MembershipRole @default(EDITOR)
+  /// Optional: Client-Approver scoped to one workspace
+  workspaceId    String?        @map("workspace_id")
   createdAt      DateTime       @default(now()) @map("created_at")
   updatedAt      DateTime       @updatedAt @map("updated_at")
+  deletedAt      DateTime?      @map("deleted_at")
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace    Workspace?   @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
 
+  /// Org-wide membership (workspaceId null). Partial uniqueness for scoped
+  /// Client-Approver rows is enforced in SQL migration (NULL-safe).
   @@unique([organizationId, userId])
   @@index([userId])
+  @@index([workspaceId])
+  @@index([deletedAt])
   @@map("memberships")
 }
 
-model Plan {
-  id                    String   @id @default(uuid()) @db.Uuid
-  code                  PlanCode @unique
-  name                  String
-  recordsPerMonth       Int      @map("records_per_month")
-  importsPerMonth       Int      @map("imports_per_month")
-  exportsPerMonth       Int      @map("exports_per_month")
-  maxStores             Int      @map("max_stores")
-  maxScheduledJobs      Int      @map("max_scheduled_jobs")
-  backupRetentionDays   Int      @map("backup_retention_days")
-  maxTeamMembers        Int      @map("max_team_members")
-  advancedTransforms    Boolean  @default(false) @map("advanced_transforms")
-  createdAt             DateTime @default(now()) @map("created_at")
-  updatedAt             DateTime @updatedAt @map("updated_at")
+model Workspace {
+  id               String         @id @default(cuid())
+  organizationId   String         @map("organization_id")
+  name             String
+  slug             String
+  timezone         String         @default("UTC")
+  locale           String         @default("en")
+  /// Content generation languages, e.g. ["en", "ur", "ur-Latn"]
+  contentLanguages String[]       @default(["en"]) @map("content_languages")
+  autoApprove      Boolean        @default(false) @map("auto_approve")
+  onboardingStep   OnboardingStep @default(BUSINESS) @map("onboarding_step")
+  onboardingData   Json?          @map("onboarding_data")
+  isDemo           Boolean        @default(false) @map("is_demo")
+  schedulePaused   Boolean        @default(false) @map("schedule_paused")
+  /// Configurable stage thresholds (niche-relative overrides)
+  stageConfig      Json?          @map("stage_config")
+  createdAt        DateTime       @default(now()) @map("created_at")
+  updatedAt        DateTime       @updatedAt @map("updated_at")
+  deletedAt        DateTime?      @map("deleted_at")
 
-  subscriptions Subscription[]
+  organization      Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  memberships       Membership[]
+  brandProfile      BrandProfile?
+  brandKits         BrandKit[]
+  brandDNAs         BrandDNA[]
+  socialAccounts    SocialAccount[]
+  competitors       Competitor[]
+  nichePlaybooks    NichePlaybook[]
+  stageReports      StageReport[]
+  contentPlans      ContentPlan[]
+  mediaAssets       MediaAsset[]
+  calendarEvents    CalendarEvent[]
+  weeklyReports     WeeklyReport[]
+  creditLedgers     CreditLedger[]
+  aiCallLogs        AICallLog[]
+  scheduledJobs     ScheduledJob[]
+  pipelineRuns      PipelineRun[]
+  approvalMagicLinks ApprovalMagicLink[]
+  auditLogs         AuditLog[]
 
-  @@map("plans")
+  @@unique([organizationId, slug])
+  @@index([organizationId])
+  @@index([deletedAt])
+  @@map("workspaces")
 }
 
+// ─── Brand ────────────────────────────────────────────────────────────────────
+
+model BrandProfile {
+  id               String   @id @default(cuid())
+  workspaceId      String   @unique @map("workspace_id")
+  businessName     String   @map("business_name")
+  websiteUrl       String?  @map("website_url")
+  industry         String?
+  niche            String?
+  location         String?
+  market           String?
+  productsServices String?  @map("products_services") @db.Text
+  pricePositioning String?  @map("price_positioning")
+  usp              String?  @db.Text
+  audienceJson     Json?    @map("audience_json")
+  goals            String[] @default([])
+  /// Tone sliders: { formalCasual, seriousPlayful, boldSubtle } 0–100
+  toneSliders      Json?    @map("tone_sliders")
+  wordsToUse       String[] @default([]) @map("words_to_use")
+  wordsToAvoid     String[] @default([]) @map("words_to_avoid")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("brand_profiles")
+}
+
+model BrandDNA {
+  id              String                       @id @default(cuid())
+  workspaceId     String                       @map("workspace_id")
+  version         Int
+  isActive        Boolean                      @default(false) @map("is_active")
+  voiceRules      Json                         @map("voice_rules")
+  contentPillars  Json                         @map("content_pillars")
+  audiencePersona Json                         @map("audience_persona")
+  doList          String[]                     @default([]) @map("do_list")
+  dontList        String[]                     @default([]) @map("dont_list")
+  visualStyleGuide Json                        @map("visual_style_guide")
+  provenHooks     Json?                        @map("proven_hooks")
+  rawDocument     String?                      @map("raw_document") @db.Text
+  /// Brand-voice embedding for similarity / originality context
+  embedding       Unsupported("vector(1536)")?
+  createdAt       DateTime                     @default(now()) @map("created_at")
+  updatedAt       DateTime                     @updatedAt @map("updated_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, version])
+  @@index([workspaceId, isActive])
+  @@map("brand_dnas")
+}
+
+model BrandKit {
+  id            String   @id @default(cuid())
+  workspaceId   String   @map("workspace_id")
+  name          String   @default("Primary")
+  isPrimary     Boolean  @default(true) @map("is_primary")
+  logoMediaId   String?  @map("logo_media_id")
+  primaryColor  String?  @map("primary_color")
+  secondaryColor String? @map("secondary_color")
+  accentColor   String?  @map("accent_color")
+  backgroundColor String? @map("background_color")
+  textColor     String?  @map("text_color")
+  fontHeading   String?  @map("font_heading")
+  fontBody      String?  @map("font_body")
+  extractedFrom String?  @map("extracted_from")
+  extraJson     Json?    @map("extra_json")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  workspace Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  logo      MediaAsset? @relation("BrandKitLogo", fields: [logoMediaId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId])
+  @@map("brand_kits")
+}
+
+model MediaAsset {
+  id           String         @id @default(cuid())
+  workspaceId  String         @map("workspace_id")
+  kind         MediaAssetKind
+  source       MediaSource    @default(UPLOAD)
+  storageKey   String         @map("storage_key")
+  url          String?
+  mimeType     String?        @map("mime_type")
+  byteSize     Int?           @map("byte_size")
+  width        Int?
+  height       Int?
+  durationMs   Int?           @map("duration_ms")
+  altText      String?        @map("alt_text")
+  metaJson     Json?          @map("meta_json")
+  uploadedById String?        @map("uploaded_by_id")
+  createdAt    DateTime       @default(now()) @map("created_at")
+  updatedAt    DateTime       @updatedAt @map("updated_at")
+  deletedAt    DateTime?      @map("deleted_at")
+
+  workspace    Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  uploadedBy   User?        @relation("MediaUploader", fields: [uploadedById], references: [id], onDelete: SetNull)
+  brandKitLogos BrandKit[]  @relation("BrandKitLogo")
+  designAssets DesignAsset[]
+
+  @@index([workspaceId, kind])
+  @@index([deletedAt])
+  @@map("media_assets")
+}
+
+// ─── Social accounts & stage ──────────────────────────────────────────────────
+
+model SocialAccount {
+  id                String              @id @default(cuid())
+  workspaceId       String              @map("workspace_id")
+  platform          Platform
+  status            SocialAccountStatus @default(CONNECTED)
+  externalAccountId String              @map("external_account_id")
+  username          String?
+  displayName       String?             @map("display_name")
+  profileUrl        String?             @map("profile_url")
+  avatarUrl         String?             @map("avatar_url")
+  /// AES-256-GCM ciphertext (base64)
+  accessTokenEnc    String?             @map("access_token_enc") @db.Text
+  refreshTokenEnc   String?             @map("refresh_token_enc") @db.Text
+  tokenIv           String?             @map("token_iv")
+  tokenAuthTag      String?             @map("token_auth_tag")
+  tokenKeyVersion   Int                 @default(1) @map("token_key_version")
+  tokenExpiresAt    DateTime?           @map("token_expires_at")
+  scopes            String[]            @default([])
+  metaJson          Json?               @map("meta_json")
+  lastSyncAt        DateTime?           @map("last_sync_at")
+  createdAt         DateTime            @default(now()) @map("created_at")
+  updatedAt         DateTime            @updatedAt @map("updated_at")
+  deletedAt         DateTime?           @map("deleted_at")
+
+  workspace  Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  snapshots  AccountSnapshot[]
+  published  PublishedPost[]
+
+  @@unique([workspaceId, platform, externalAccountId])
+  @@index([workspaceId, platform])
+  @@index([status])
+  @@index([deletedAt])
+  @@map("social_accounts")
+}
+
+model AccountSnapshot {
+  id               String   @id @default(cuid())
+  socialAccountId  String   @map("social_account_id")
+  capturedAt       DateTime @default(now()) @map("captured_at")
+  followers        Int?
+  following        Int?
+  mediaCount       Int?     @map("media_count")
+  reach            Int?
+  impressions      Int?
+  engagementRate   Float?   @map("engagement_rate")
+  profileViews     Int?     @map("profile_views")
+  rawJson          Json?    @map("raw_json")
+
+  socialAccount SocialAccount @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
+
+  @@index([socialAccountId, capturedAt])
+  @@map("account_snapshots")
+}
+
+model StageReport {
+  id                String       @id @default(cuid())
+  workspaceId       String       @map("workspace_id")
+  stage             AccountStage
+  score             Float
+  nicheRelative     Boolean      @default(true) @map("niche_relative")
+  signalsJson       Json         @map("signals_json")
+  bottlenecksJson   Json?        @map("bottlenecks_json")
+  /// Recommended content mix %, e.g. { reel: 40, carousel: 35, single: 25 }
+  contentMixJson    Json         @map("content_mix_json")
+  summary           String?      @db.Text
+  periodStart       DateTime     @map("period_start")
+  periodEnd         DateTime     @map("period_end")
+  createdAt         DateTime     @default(now()) @map("created_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, createdAt])
+  @@map("stage_reports")
+}
+
+// ─── Competitor intelligence ──────────────────────────────────────────────────
+
+model Competitor {
+  id              String           @id @default(cuid())
+  workspaceId     String           @map("workspace_id")
+  platform        Platform
+  handle          String
+  displayName     String?          @map("display_name")
+  profileUrl      String?          @map("profile_url")
+  bio             String?          @db.Text
+  tier            CompetitorTier   @default(WATCHLIST)
+  source          CompetitorSource @default(MANUAL)
+  momentumScore   Float?           @map("momentum_score")
+  relevanceScore  Float?           @map("relevance_score")
+  isActive        Boolean          @default(true) @map("is_active")
+  metaJson        Json?            @map("meta_json")
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
+  deletedAt       DateTime?        @map("deleted_at")
+
+  workspace  Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  snapshots  CompetitorSnapshot[]
+  posts      CompetitorPost[]
+
+  @@unique([workspaceId, platform, handle])
+  @@index([workspaceId, tier])
+  @@index([workspaceId, momentumScore])
+  @@index([deletedAt])
+  @@map("competitors")
+}
+
+model CompetitorSnapshot {
+  id             String   @id @default(cuid())
+  competitorId   String   @map("competitor_id")
+  capturedAt     DateTime @default(now()) @map("captured_at")
+  followers      Int?
+  following      Int?
+  mediaCount     Int?     @map("media_count")
+  engagementRate Float?   @map("engagement_rate")
+  growth7dPct    Float?   @map("growth_7d_pct")
+  growth30dPct   Float?   @map("growth_30d_pct")
+  rawJson        Json?    @map("raw_json")
+
+  competitor Competitor @relation(fields: [competitorId], references: [id], onDelete: Cascade)
+
+  @@index([competitorId, capturedAt])
+  @@map("competitor_snapshots")
+}
+
+model CompetitorPost {
+  id              String                       @id @default(cuid())
+  competitorId    String                       @map("competitor_id")
+  platformPostId  String                       @map("platform_post_id")
+  url             String?
+  format          PostFormat?
+  caption         String?                      @db.Text
+  postedAt        DateTime?                    @map("posted_at")
+  likeCount       Int?                         @map("like_count")
+  commentCount    Int?                         @map("comment_count")
+  shareCount      Int?                         @map("share_count")
+  saveCount       Int?                         @map("save_count")
+  viewCount       Int?                         @map("view_count")
+  engagementTotal Int?                         @map("engagement_total")
+  isOutlier       Boolean                      @default(false) @map("is_outlier")
+  outlierReason   String?                      @map("outlier_reason") @db.Text
+  contentPillar   ContentPillar?               @map("content_pillar")
+  hookType        HookType?                    @map("hook_type")
+  ctaType         CtaType?                     @map("cta_type")
+  visualStyle     String?                      @map("visual_style")
+  captionLength   Int?                         @map("caption_length")
+  hashtagStrategy String?                      @map("hashtag_strategy")
+  classification  Json?
+  embedding       Unsupported("vector(1536)")?
+  rawJson         Json?                        @map("raw_json")
+  createdAt       DateTime                     @default(now()) @map("created_at")
+  updatedAt       DateTime                     @updatedAt @map("updated_at")
+
+  competitor Competitor @relation(fields: [competitorId], references: [id], onDelete: Cascade)
+
+  @@unique([competitorId, platformPostId])
+  @@index([competitorId, postedAt])
+  @@index([isOutlier])
+  @@map("competitor_posts")
+}
+
+model NichePlaybook {
+  id                 String   @id @default(cuid())
+  workspaceId        String   @map("workspace_id")
+  version            Int
+  isActive           Boolean  @default(false) @map("is_active")
+  winningFormats     Json     @map("winning_formats")
+  hookPatterns       Json     @map("hook_patterns")
+  topicClusters      Json     @map("topic_clusters")
+  bestPostingWindows Json     @map("best_posting_windows")
+  trendingThemes     Json?    @map("trending_themes")
+  contentGaps        Json?    @map("content_gaps")
+  whatChanged        Json?    @map("what_changed")
+  rawJson            Json?    @map("raw_json")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, version])
+  @@index([workspaceId, isActive])
+  @@map("niche_playbooks")
+}
+
+// ─── Content planning & generation ────────────────────────────────────────────
+
+model ContentPlan {
+  id           String            @id @default(cuid())
+  workspaceId  String            @map("workspace_id")
+  /// ISO week start (UTC date of Monday or workspace-local Monday stored as date)
+  weekStart    DateTime          @map("week_start") @db.Date
+  weekEnd      DateTime          @map("week_end") @db.Date
+  status       ContentPlanStatus @default(DRAFT)
+  title        String?
+  rationale    String?           @db.Text
+  createdById  String?           @map("created_by_id")
+  pipelineRunId String?          @map("pipeline_run_id")
+  createdAt    DateTime          @default(now()) @map("created_at")
+  updatedAt    DateTime          @updatedAt @map("updated_at")
+  deletedAt    DateTime?         @map("deleted_at")
+
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdBy   User?         @relation("ContentPlanCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  pipelineRun PipelineRun?  @relation(fields: [pipelineRunId], references: [id], onDelete: SetNull)
+  posts       PlannedPost[]
+
+  @@unique([workspaceId, weekStart])
+  @@index([workspaceId, status])
+  @@index([deletedAt])
+  @@map("content_plans")
+}
+
+model PlannedPost {
+  id              String            @id @default(cuid())
+  contentPlanId   String            @map("content_plan_id")
+  workspaceId     String            @map("workspace_id")
+  dayIndex        Int               @map("day_index")
+  platforms       Platform[]
+  format          PostFormat
+  pillar          ContentPillar?
+  topic           String?
+  hookAngle       String?           @map("hook_angle")
+  objective       String?
+  targetPublishAt DateTime?         @map("target_publish_at")
+  rationale       String?           @db.Text
+  status          PlannedPostStatus @default(PLANNED)
+  sortOrder       Int               @default(0) @map("sort_order")
+  createdAt       DateTime          @default(now()) @map("created_at")
+  updatedAt       DateTime          @updatedAt @map("updated_at")
+  deletedAt       DateTime?         @map("deleted_at")
+
+  contentPlan   ContentPlan    @relation(fields: [contentPlanId], references: [id], onDelete: Cascade)
+  drafts        PostDraft[]
+  designAssets  DesignAsset[]
+  approvals     Approval[]
+  comments      Comment[]
+  scheduledJobs ScheduledJob[]
+  publishedPosts PublishedPost[]
+
+  @@index([contentPlanId, dayIndex])
+  @@index([workspaceId, status])
+  @@index([targetPublishAt])
+  @@index([deletedAt])
+  @@map("planned_posts")
+}
+
+model PostDraft {
+  id                String                       @id @default(cuid())
+  plannedPostId     String                       @map("planned_post_id")
+  version           Int
+  isActive          Boolean                      @default(true) @map("is_active")
+  selectedHook      String?                      @map("selected_hook") @db.Text
+  hooksJson         Json?                        @map("hooks_json")
+  caption           String?                      @db.Text
+  hashtags          String[]                     @default([])
+  carouselSlides    Json?                        @map("carousel_slides")
+  reelScript        Json?                        @map("reel_script")
+  altText           String?                      @map("alt_text")
+  firstComment      String?                      @map("first_comment") @db.Text
+  qualityScores     Json?                        @map("quality_scores")
+  qualityPassed     Boolean?                     @map("quality_passed")
+  originalityScore  Float?                       @map("originality_score")
+  complianceFlags   Json?                        @map("compliance_flags")
+  embedding         Unsupported("vector(1536)")?
+  createdById       String?                      @map("created_by_id")
+  feedbackPrompt    String?                      @map("feedback_prompt") @db.Text
+  createdAt         DateTime                     @default(now()) @map("created_at")
+  updatedAt         DateTime                     @updatedAt @map("updated_at")
+
+  plannedPost PlannedPost @relation(fields: [plannedPostId], references: [id], onDelete: Cascade)
+  createdBy   User?       @relation("PostDraftCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@unique([plannedPostId, version])
+  @@index([plannedPostId, isActive])
+  @@map("post_drafts")
+}
+
+model DesignAsset {
+  id            String          @id @default(cuid())
+  plannedPostId String          @map("planned_post_id")
+  workspaceId   String          @map("workspace_id")
+  kind          DesignAssetKind
+  templateId    String?         @map("template_id")
+  slideIndex    Int?            @map("slide_index")
+  width         Int
+  height        Int
+  storageKey    String?         @map("storage_key")
+  url           String?
+  mediaAssetId  String?         @map("media_asset_id")
+  editorState   Json?           @map("editor_state")
+  renderMeta    Json?           @map("render_meta")
+  createdAt     DateTime        @default(now()) @map("created_at")
+  updatedAt     DateTime        @updatedAt @map("updated_at")
+
+  plannedPost PlannedPost @relation(fields: [plannedPostId], references: [id], onDelete: Cascade)
+  mediaAsset  MediaAsset? @relation(fields: [mediaAssetId], references: [id], onDelete: SetNull)
+
+  @@index([plannedPostId])
+  @@index([workspaceId])
+  @@map("design_assets")
+}
+
+// ─── Approval ─────────────────────────────────────────────────────────────────
+
+model Approval {
+  id            String          @id @default(cuid())
+  plannedPostId String          @map("planned_post_id")
+  status        ApprovalStatus
+  channel       ApprovalChannel @default(DASHBOARD)
+  actorUserId   String?         @map("actor_user_id")
+  actorLabel    String?         @map("actor_label")
+  feedback      String?         @db.Text
+  createdAt     DateTime        @default(now()) @map("created_at")
+
+  plannedPost PlannedPost @relation(fields: [plannedPostId], references: [id], onDelete: Cascade)
+  actorUser   User?       @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([plannedPostId, createdAt])
+  @@map("approvals")
+}
+
+model Comment {
+  id            String   @id @default(cuid())
+  plannedPostId String   @map("planned_post_id")
+  authorUserId  String?  @map("author_user_id")
+  authorLabel   String?  @map("author_label")
+  body          String   @db.Text
+  parentId      String?  @map("parent_id")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+  deletedAt     DateTime? @map("deleted_at")
+
+  plannedPost PlannedPost @relation(fields: [plannedPostId], references: [id], onDelete: Cascade)
+  authorUser  User?       @relation(fields: [authorUserId], references: [id], onDelete: SetNull)
+  parent      Comment?    @relation("CommentThread", fields: [parentId], references: [id], onDelete: SetNull)
+  replies     Comment[]   @relation("CommentThread")
+
+  @@index([plannedPostId, createdAt])
+  @@index([deletedAt])
+  @@map("comments")
+}
+
+model ApprovalMagicLink {
+  id           String    @id @default(cuid())
+  workspaceId  String    @map("workspace_id")
+  contentPlanId String?  @map("content_plan_id")
+  tokenHash    String    @unique @map("token_hash")
+  expiresAt    DateTime  @map("expires_at")
+  usedAt       DateTime? @map("used_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([expiresAt])
+  @@map("approval_magic_links")
+}
+
+// ─── Scheduling & publishing ──────────────────────────────────────────────────
+
+model ScheduledJob {
+  id            String             @id @default(cuid())
+  workspaceId   String             @map("workspace_id")
+  plannedPostId String?            @map("planned_post_id")
+  kind          ScheduledJobKind
+  status        ScheduledJobStatus @default(PENDING)
+  runAt         DateTime           @map("run_at")
+  bullJobId     String?            @map("bull_job_id")
+  attempts      Int                @default(0)
+  lastError     String?            @map("last_error") @db.Text
+  payloadJson   Json?              @map("payload_json")
+  idempotencyKey String?           @unique @map("idempotency_key")
+  createdAt     DateTime           @default(now()) @map("created_at")
+  updatedAt     DateTime           @updatedAt @map("updated_at")
+
+  workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  plannedPost PlannedPost? @relation(fields: [plannedPostId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, status, runAt])
+  @@index([plannedPostId])
+  @@map("scheduled_jobs")
+}
+
+model PublishedPost {
+  id               String    @id @default(cuid())
+  plannedPostId    String    @map("planned_post_id")
+  socialAccountId  String    @map("social_account_id")
+  platform         Platform
+  platformPostId   String    @map("platform_post_id")
+  platformUrl      String?   @map("platform_url")
+  publishedAt      DateTime  @default(now()) @map("published_at")
+  firstCommentId   String?   @map("first_comment_id")
+  rawJson          Json?     @map("raw_json")
+  createdAt        DateTime  @default(now()) @map("created_at")
+
+  plannedPost   PlannedPost   @relation(fields: [plannedPostId], references: [id], onDelete: Cascade)
+  socialAccount SocialAccount @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
+  metrics       PostMetric[]
+
+  @@unique([socialAccountId, platformPostId])
+  @@index([plannedPostId])
+  @@index([publishedAt])
+  @@map("published_posts")
+}
+
+model PostMetric {
+  id              String          @id @default(cuid())
+  publishedPostId String          @map("published_post_id")
+  timepoint       MetricTimepoint
+  capturedAt      DateTime        @default(now()) @map("captured_at")
+  reach           Int?
+  impressions     Int?
+  likes           Int?
+  comments        Int?
+  saves           Int?
+  shares          Int?
+  profileVisits   Int?            @map("profile_visits")
+  follows         Int?
+  views           Int?
+  rawJson         Json?           @map("raw_json")
+
+  publishedPost PublishedPost @relation(fields: [publishedPostId], references: [id], onDelete: Cascade)
+
+  @@unique([publishedPostId, timepoint, capturedAt])
+  @@index([publishedPostId, timepoint])
+  @@map("post_metrics")
+}
+
+// ─── Calendar & reports ───────────────────────────────────────────────────────
+
+model CalendarEvent {
+  id          String   @id @default(cuid())
+  workspaceId String   @map("workspace_id")
+  title       String
+  description String?  @db.Text
+  startsAt    DateTime @map("starts_at")
+  endsAt      DateTime? @map("ends_at")
+  /// holiday | promo | industry | local | custom
+  kind        String   @default("custom")
+  metaJson    Json?    @map("meta_json")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, startsAt])
+  @@map("calendar_events")
+}
+
+model WeeklyReport {
+  id          String   @id @default(cuid())
+  workspaceId String   @map("workspace_id")
+  weekStart   DateTime @map("week_start") @db.Date
+  weekEnd     DateTime @map("week_end") @db.Date
+  summaryJson Json     @map("summary_json")
+  pdfStorageKey String? @map("pdf_storage_key")
+  emailSentAt DateTime? @map("email_sent_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, weekStart])
+  @@map("weekly_reports")
+}
+
+// ─── Pipeline orchestration ───────────────────────────────────────────────────
+
+model PipelineRun {
+  id              String            @id @default(cuid())
+  workspaceId     String            @map("workspace_id")
+  status          PipelineRunStatus @default(QUEUED)
+  currentStep     PipelineStep?     @map("current_step")
+  stepsJson       Json              @default("[]") @map("steps_json")
+  errorMessage    String?           @map("error_message") @db.Text
+  triggeredById   String?           @map("triggered_by_id")
+  bullFlowId      String?           @map("bull_flow_id")
+  startedAt       DateTime?         @map("started_at")
+  finishedAt      DateTime?         @map("finished_at")
+  createdAt       DateTime          @default(now()) @map("created_at")
+  updatedAt       DateTime          @updatedAt @map("updated_at")
+
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  triggeredBy User?         @relation("PipelineRunTriggeredBy", fields: [triggeredById], references: [id], onDelete: SetNull)
+  contentPlans ContentPlan[]
+
+  @@index([workspaceId, createdAt])
+  @@index([status])
+  @@map("pipeline_runs")
+}
+
+// ─── SaaS: billing, credits, AI cost, audit ───────────────────────────────────
+
 model Subscription {
-  id                   String             @id @default(uuid()) @db.Uuid
-  organizationId       String             @unique @map("organization_id") @db.Uuid
-  planId               String             @map("plan_id") @db.Uuid
+  id                   String             @id @default(cuid())
+  organizationId       String             @unique @map("organization_id")
+  planCode             PlanCode           @default(STARTER) @map("plan_code")
   status               SubscriptionStatus @default(TRIALING)
-  shopifyChargeId      String?            @map("shopify_charge_id")
+  stripeCustomerId     String?            @unique @map("stripe_customer_id")
+  stripeSubscriptionId String?            @unique @map("stripe_subscription_id")
   currentPeriodStart   DateTime?          @map("current_period_start")
   currentPeriodEnd     DateTime?          @map("current_period_end")
+  creditBalance        Int                @default(0) @map("credit_balance")
+  brandLimit           Int                @default(1) @map("brand_limit")
+  platformLimit        Int                @default(2) @map("platform_limit")
+  metaJson             Json?              @map("meta_json")
   createdAt            DateTime           @default(now()) @map("created_at")
   updatedAt            DateTime           @updatedAt @map("updated_at")
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  plan         Plan         @relation(fields: [planId], references: [id])
 
   @@map("subscriptions")
 }
 
-model UsageRecord {
-  id             String   @id @default(uuid()) @db.Uuid
-  organizationId String   @map("organization_id") @db.Uuid
-  storeId        String?  @map("store_id") @db.Uuid
-  meter          String
-  quantity       Int
-  periodStart    DateTime @map("period_start")
-  periodEnd      DateTime @map("period_end")
-  createdAt      DateTime @default(now()) @map("created_at")
+model CreditLedger {
+  id          String             @id @default(cuid())
+  workspaceId String             @map("workspace_id")
+  /// Also track org-level via workspace → org; amount signed (+grant / −spend)
+  amount      Int
+  reason      CreditLedgerReason
+  description String?
+  aiCallLogId String?            @map("ai_call_log_id")
+  balanceAfter Int?              @map("balance_after")
+  createdAt   DateTime           @default(now()) @map("created_at")
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  store        Store?       @relation(fields: [storeId], references: [id], onDelete: SetNull)
+  workspace Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  aiCallLog AICallLog? @relation(fields: [aiCallLogId], references: [id], onDelete: SetNull)
 
-  @@index([organizationId, meter, periodStart])
-  @@map("usage_records")
+  @@index([workspaceId, createdAt])
+  @@map("credit_ledgers")
 }
 
-model Store {
-  id             String    @id @default(uuid()) @db.Uuid
-  organizationId String    @map("organization_id") @db.Uuid
-  shopDomain     String    @unique @map("shop_domain")
-  name           String?
-  currency       String?
-  timezone       String?
-  planDisplayName String?  @map("plan_display_name")
-  isActive       Boolean   @default(true) @map("is_active")
-  uninstalledAt  DateTime? @map("uninstalled_at")
-  createdAt      DateTime  @default(now()) @map("created_at")
-  updatedAt      DateTime  @updatedAt @map("updated_at")
+model AICallLog {
+  id            String     @id @default(cuid())
+  workspaceId   String     @map("workspace_id")
+  provider      AIProvider
+  kind          AICallKind
+  model         String?
+  inputTokens   Int?       @map("input_tokens")
+  outputTokens  Int?       @map("output_tokens")
+  imageCount    Int?       @map("image_count")
+  costUsdCents  Int?       @map("cost_usd_cents")
+  latencyMs     Int?       @map("latency_ms")
+  success       Boolean    @default(true)
+  errorMessage  String?    @map("error_message")
+  metaJson      Json?      @map("meta_json")
+  createdAt     DateTime   @default(now()) @map("created_at")
 
-  organization       Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  connection         ShopifyConnection?
-  jobs               Job[]
-  files              FileObject[]
-  templates          Template[]
-  fieldMappings      FieldMapping[]
-  scheduledJobs      ScheduledJob[]
-  backups            Backup[]
-  auditLogs          AuditLog[]
-  notifications      Notification[]
-  usageRecords       UsageRecord[]
-  resourceMappings   ResourceMapping[]
+  workspace     Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  creditLedgers CreditLedger[]
 
-  @@index([organizationId])
-  @@map("stores")
-}
-
-model ShopifyConnection {
-  id                    String    @id @default(uuid()) @db.Uuid
-  storeId               String    @unique @map("store_id") @db.Uuid
-  accessTokenEncrypted  String    @map("access_token_encrypted")
-  scope                 String
-  installedAt           DateTime  @default(now()) @map("installed_at")
-  lastVerifiedAt        DateTime? @map("last_verified_at")
-  createdAt             DateTime  @default(now()) @map("created_at")
-  updatedAt             DateTime  @updatedAt @map("updated_at")
-
-  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
-
-  @@map("shopify_connections")
-}
-
-model Job {
-  id                 String    @id @default(uuid()) @db.Uuid
-  organizationId     String    @map("organization_id") @db.Uuid
-  storeId            String    @map("store_id") @db.Uuid
-  createdById        String?   @map("created_by_id") @db.Uuid
-  type               JobType
-  dataset            Dataset
-  status             JobStatus @default(QUEUED)
-  startedAt          DateTime? @map("started_at")
-  completedAt        DateTime? @map("completed_at")
-  totalRecords       Int       @default(0) @map("total_records")
-  processedRecords   Int       @default(0) @map("processed_records")
-  successfulRecords  Int       @default(0) @map("successful_records")
-  failedRecords      Int       @default(0) @map("failed_records")
-  createdRecords     Int       @default(0) @map("created_records")
-  updatedRecords     Int       @default(0) @map("updated_records")
-  skippedRecords     Int       @default(0) @map("skipped_records")
-  errorCount         Int       @default(0) @map("error_count")
-  progressPercent    Int       @default(0) @map("progress_percent")
-  inputFileId        String?   @map("input_file_id") @db.Uuid
-  outputFileId       String?   @map("output_file_id") @db.Uuid
-  errorFileId        String?   @map("error_file_id") @db.Uuid
-  config             Json?
-  mapping            Json?
-  previewSummary     Json?     @map("preview_summary")
-  shopifyBulkOpId    String?   @map("shopify_bulk_op_id")
-  logs               Json?
-  cancelRequested    Boolean   @default(false) @map("cancel_requested")
-  createdAt          DateTime  @default(now()) @map("created_at")
-  updatedAt          DateTime  @updatedAt @map("updated_at")
-
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  store        Store        @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  createdBy    User?        @relation("JobCreator", fields: [createdById], references: [id], onDelete: SetNull)
-  inputFile    FileObject?  @relation("JobInputFile", fields: [inputFileId], references: [id], onDelete: SetNull)
-  outputFile   FileObject?  @relation("JobOutputFile", fields: [outputFileId], references: [id], onDelete: SetNull)
-  errorFile    FileObject?  @relation("JobErrorFile", fields: [errorFileId], references: [id], onDelete: SetNull)
-  records      JobRecord[]
-  errors       JobError[]
-
-  @@index([organizationId, createdAt])
-  @@index([storeId, status])
-  @@index([status, createdAt])
-  @@map("jobs")
-}
-
-model JobRecord {
-  id              String          @id @default(uuid()) @db.Uuid
-  jobId           String          @map("job_id") @db.Uuid
-  rowNumber       Int             @map("row_number")
-  idempotencyKey  String          @map("idempotency_key")
-  status          JobRecordStatus @default(PENDING)
-  shopifyGid      String?         @map("shopify_gid")
-  recordHash      String?         @map("record_hash")
-  payload         Json?
-  result          Json?
-  createdAt       DateTime        @default(now()) @map("created_at")
-  updatedAt       DateTime        @updatedAt @map("updated_at")
-
-  job Job @relation(fields: [jobId], references: [id], onDelete: Cascade)
-
-  @@unique([jobId, idempotencyKey])
-  @@index([jobId, status])
-  @@map("job_records")
-}
-
-model JobError {
-  id            String   @id @default(uuid()) @db.Uuid
-  jobId         String   @map("job_id") @db.Uuid
-  rowNumber     Int?     @map("row_number")
-  field         String?
-  value         String?
-  message       String
-  suggestedFix  String?  @map("suggested_fix")
-  raw           Json?
-  createdAt     DateTime @default(now()) @map("created_at")
-
-  job Job @relation(fields: [jobId], references: [id], onDelete: Cascade)
-
-  @@index([jobId])
-  @@map("job_errors")
-}
-
-model FileObject {
-  id             String   @id @default(uuid()) @db.Uuid
-  organizationId String   @map("organization_id") @db.Uuid
-  storeId        String?  @map("store_id") @db.Uuid
-  kind           FileKind
-  filename       String
-  contentType    String   @map("content_type")
-  sizeBytes      BigInt   @map("size_bytes")
-  storageKey     String   @map("storage_key")
-  checksum       String?
-  createdAt      DateTime @default(now()) @map("created_at")
-
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  store        Store?       @relation(fields: [storeId], references: [id], onDelete: SetNull)
-  jobsAsInput  Job[]        @relation("JobInputFile")
-  jobsAsOutput Job[]        @relation("JobOutputFile")
-  jobsAsError  Job[]        @relation("JobErrorFile")
-  backupFiles  BackupFile[]
-
-  @@index([organizationId, createdAt])
-  @@map("files")
-}
-
-model Template {
-  id             String   @id @default(uuid()) @db.Uuid
-  organizationId String   @map("organization_id") @db.Uuid
-  storeId        String?  @map("store_id") @db.Uuid
-  name           String
-  dataset        Dataset
-  columns        Json
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
-
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  store        Store?       @relation(fields: [storeId], references: [id], onDelete: SetNull)
-
-  @@index([organizationId])
-  @@map("templates")
-}
-
-model FieldMapping {
-  id             String   @id @default(uuid()) @db.Uuid
-  organizationId String   @map("organization_id") @db.Uuid
-  storeId        String?  @map("store_id") @db.Uuid
-  name           String
-  dataset        Dataset
-  mappings       Json
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
-
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  store        Store?       @relation(fields: [storeId], references: [id], onDelete: SetNull)
-
-  @@index([organizationId, dataset])
-  @@map("field_mappings")
-}
-
-model Transformation {
-  id             String   @id @default(uuid()) @db.Uuid
-  organizationId String   @map("organization_id") @db.Uuid
-  name           String
-  rules          Json
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
-
-  @@index([organizationId])
-  @@map("transformations")
-}
-
-model ScheduledJob {
-  id             String    @id @default(uuid()) @db.Uuid
-  organizationId String    @map("organization_id") @db.Uuid
-  storeId        String    @map("store_id") @db.Uuid
-  name           String
-  jobType        JobType   @map("job_type")
-  cronExpression String    @map("cron_expression")
-  timezone       String    @default("UTC")
-  enabled        Boolean   @default(true)
-  config         Json?
-  lastRunAt      DateTime? @map("last_run_at")
-  nextRunAt      DateTime? @map("next_run_at")
-  createdAt      DateTime  @default(now()) @map("created_at")
-  updatedAt      DateTime  @updatedAt @map("updated_at")
-
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  store        Store        @relation(fields: [storeId], references: [id], onDelete: Cascade)
-
-  @@index([enabled, nextRunAt])
-  @@map("scheduled_jobs")
-}
-
-model Backup {
-  id             String   @id @default(uuid()) @db.Uuid
-  organizationId String   @map("organization_id") @db.Uuid
-  storeId        String   @map("store_id") @db.Uuid
-  label          String?
-  datasets       Json
-  status         JobStatus @default(QUEUED)
-  createdAt      DateTime @default(now()) @map("created_at")
-  completedAt    DateTime? @map("completed_at")
-
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  store        Store        @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  files        BackupFile[]
-
-  @@index([storeId, createdAt])
-  @@map("backups")
-}
-
-model BackupFile {
-  id         String @id @default(uuid()) @db.Uuid
-  backupId   String @map("backup_id") @db.Uuid
-  fileId     String @map("file_id") @db.Uuid
-  dataset    Dataset
-
-  backup Backup     @relation(fields: [backupId], references: [id], onDelete: Cascade)
-  file   FileObject @relation(fields: [fileId], references: [id], onDelete: Cascade)
-
-  @@map("backup_files")
+  @@index([workspaceId, createdAt])
+  @@index([provider, kind])
+  @@map("ai_call_logs")
 }
 
 model AuditLog {
-  id             String   @id @default(uuid()) @db.Uuid
-  organizationId String   @map("organization_id") @db.Uuid
-  storeId        String?  @map("store_id") @db.Uuid
-  userId         String?  @map("user_id") @db.Uuid
+  id             String   @id @default(cuid())
+  organizationId String?  @map("organization_id")
+  workspaceId    String?  @map("workspace_id")
+  actorUserId    String?  @map("actor_user_id")
   action         String
-  resourceType   String?  @map("resource_type")
-  resourceId     String?  @map("resource_id")
-  metadata       Json?
+  entityType     String?  @map("entity_type")
+  entityId       String?  @map("entity_id")
+  metaJson       Json?    @map("meta_json")
   createdAt      DateTime @default(now()) @map("created_at")
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  store        Store?       @relation(fields: [storeId], references: [id], onDelete: SetNull)
-  user         User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  workspace    Workspace?    @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  actorUser    User?         @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
 
   @@index([organizationId, createdAt])
+  @@index([workspaceId, createdAt])
+  @@index([actorUserId])
   @@map("audit_logs")
 }
 
-model Notification {
-  id             String   @id @default(uuid()) @db.Uuid
-  organizationId String   @map("organization_id") @db.Uuid
-  storeId        String?  @map("store_id") @db.Uuid
-  userId         String?  @map("user_id") @db.Uuid
-  title          String
-  body           String
-  readAt         DateTime? @map("read_at")
+model FeatureFlag {
+  id             String   @id @default(cuid())
+  organizationId String?  @map("organization_id")
+  key            String
+  enabled        Boolean  @default(false)
+  metaJson       Json?    @map("meta_json")
   createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  store        Store?       @relation(fields: [storeId], references: [id], onDelete: SetNull)
-  user         User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
-  @@index([userId, readAt])
-  @@map("notifications")
-}
-
-model ResourceMapping {
-  id              String   @id @default(uuid()) @db.Uuid
-  storeId         String   @map("store_id") @db.Uuid
-  sourceStoreId   String   @map("source_store_id") @db.Uuid
-  resourceType    String   @map("resource_type")
-  sourceId        String   @map("source_id")
-  destinationId   String   @map("destination_id")
-  createdAt       DateTime @default(now()) @map("created_at")
-
-  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
-
-  @@unique([storeId, sourceStoreId, resourceType, sourceId])
-  @@map("resource_mappings")
+  @@unique([organizationId, key])
+  @@index([key])
+  @@map("feature_flags")
 }
