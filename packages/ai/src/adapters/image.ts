@@ -14,19 +14,10 @@ export type ImageGenerateResult = {
   prompt: string;
   /** SVG markup used when fal/replicate keys are absent */
   svg?: string;
+  requestId?: string;
 };
 
-/**
- * Image generation adapter. With FAL_KEY/REPLICATE_API_TOKEN would call remotes;
- * demo mode returns a deterministic branded SVG data URL.
- */
-export async function generateImage(
-  input: ImageGenerateInput,
-): Promise<ImageGenerateResult> {
-  if (process.env.FAL_KEY || process.env.REPLICATE_API_TOKEN) {
-    // Live providers require paid accounts — keep interface ready, use demo render.
-  }
-
+function demoSvg(input: ImageGenerateInput): ImageGenerateResult {
   const w = input.width ?? 1080;
   const h = input.height ?? 1350;
   const colors = input.brandColors?.length
@@ -47,12 +38,128 @@ export async function generateImage(
   <text x="72" y="${h * 0.78}" fill="#FAF7F2" opacity="0.7" font-family="system-ui" font-size="22">demo imagery · ${hash}</text>
 </svg>`;
   const url = `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}`;
-  return {
-    url,
-    provider: "demo-svg",
-    prompt: input.prompt,
-    svg,
+  return { url, provider: "demo-svg", prompt: input.prompt, svg };
+}
+
+async function generateViaFal(
+  input: ImageGenerateInput,
+  key: string,
+): Promise<ImageGenerateResult> {
+  const model =
+    process.env.FAL_IMAGE_MODEL || "fal-ai/flux/schnell";
+  const colors = input.brandColors?.length
+    ? `Brand palette: ${input.brandColors.join(", ")}. `
+    : "";
+  const prompt = `${colors}${input.prompt}. Premium social media photography, high-end brand aesthetic, no watermarks, no text overlay.`;
+
+  // fal queue API (sync-ish: submit then poll)
+  const submit = await fetch(`https://queue.fal.run/${model}`, {
+    method: "POST",
+    headers: {
+      Authorization: `Key ${key}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      prompt,
+      image_size:
+        input.width && input.height
+          ? { width: input.width, height: input.height }
+          : "portrait_4_5",
+      num_images: 1,
+      enable_safety_checker: true,
+    }),
+    signal: AbortSignal.timeout(30_000),
+  });
+
+  if (!submit.ok) {
+    const t = await submit.text().catch(() => "");
+    throw new Error(`fal submit ${submit.status}: ${t.slice(0, 200)}`);
+  }
+
+  const submitted = (await submit.json()) as {
+    request_id?: string;
+    status_url?: string;
+    response_url?: string;
+    images?: Array<{ url: string }>;
+    // some models return immediately
   };
+
+  if (submitted.images?.[0]?.url) {
+    return {
+      url: submitted.images[0].url,
+      provider: `fal:${model}`,
+      prompt: input.prompt,
+      requestId: submitted.request_id,
+    };
+  }
+
+  const requestId = submitted.request_id;
+  if (!requestId) throw new Error("fal: missing request_id");
+
+  const statusUrl =
+    submitted.status_url ||
+    `https://queue.fal.run/${model}/requests/${requestId}/status`;
+  const resultUrl =
+    submitted.response_url ||
+    `https://queue.fal.run/${model}/requests/${requestId}`;
+
+  for (let i = 0; i < 40; i++) {
+    await new Promise((r) => setTimeout(r, 750));
+    const st = await fetch(statusUrl, {
+      headers: { Authorization: `Key ${key}` },
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!st.ok) continue;
+    const status = (await st.json()) as { status?: string };
+    if (status.status === "COMPLETED" || status.status === "OK") {
+      const done = await fetch(resultUrl, {
+        headers: { Authorization: `Key ${key}` },
+        signal: AbortSignal.timeout(20_000),
+      });
+      if (!done.ok) throw new Error(`fal result ${done.status}`);
+      const json = (await done.json()) as {
+        images?: Array<{ url: string }>;
+        image?: { url: string };
+      };
+      const url = json.images?.[0]?.url || json.image?.url;
+      if (!url) throw new Error("fal: no image url in result");
+      return {
+        url,
+        provider: `fal:${model}`,
+        prompt: input.prompt,
+        requestId,
+      };
+    }
+    if (status.status === "FAILED") {
+      throw new Error("fal generation failed");
+    }
+  }
+  throw new Error("fal generation timed out");
+}
+
+/**
+ * Image generation adapter.
+ * Uses fal.ai when FAL_KEY is set; otherwise deterministic branded SVG.
+ */
+export async function generateImage(
+  input: ImageGenerateInput,
+): Promise<ImageGenerateResult> {
+  const falKey = process.env.FAL_KEY;
+  if (falKey) {
+    try {
+      return await generateViaFal(input, falKey);
+    } catch (err) {
+      console.error("[image] fal failed, using demo svg", err);
+      const demo = demoSvg(input);
+      return { ...demo, provider: "fal+demo-fallback" };
+    }
+  }
+
+  if (process.env.REPLICATE_API_TOKEN) {
+    // Replicate path reserved — fall through to demo until wired with a model version.
+  }
+
+  return demoSvg(input);
 }
 
 function escapeXml(s: string) {

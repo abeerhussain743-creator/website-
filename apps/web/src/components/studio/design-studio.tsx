@@ -66,6 +66,7 @@ export function DesignStudio({
     useState<keyof typeof PLATFORM_SIZES>("FEED_PORTRAIT");
   const [post, setPost] = useState<GeneratedPost | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [aiImageUrl, setAiImageUrl] = useState<string | null>(null);
   const [slideIndex, setSlideIndex] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
@@ -149,6 +150,35 @@ export function DesignStudio({
         setStatus("Design updated.");
       } catch (err) {
         setError(err instanceof Error ? err.message : "Render failed");
+      }
+    });
+  }
+
+  function generateAiImage() {
+    startTransition(async () => {
+      setError(null);
+      setStatus("Generating AI imagery via fal…");
+      try {
+        const prompt =
+          post?.visualDirection ||
+          `${topic}. Atmospheric branded photo for ${businessName}`;
+        const res = await fetch("/api/studio/image", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            workspaceId,
+            prompt,
+            width: 1080,
+            height: 1350,
+          }),
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error ?? "Image failed");
+        setAiImageUrl(`${json.url}?t=${Date.now()}`);
+        setStatus(`AI image ready (${json.provider}).`);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Image failed");
+        setStatus(null);
       }
     });
   }
@@ -280,6 +310,14 @@ export function DesignStudio({
                 disabled={pending || !post}
               >
                 Re-render design
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={generateAiImage}
+                disabled={pending}
+              >
+                AI imagery (fal)
               </Button>
             </div>
             {status ? (
@@ -422,6 +460,15 @@ export function DesignStudio({
             </a>
           ) : null}
         </div>
+        {aiImageUrl ? (
+          <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 shadow-soft">
+            <h2 className="mb-3 font-medium">AI imagery</h2>
+            <div className="overflow-hidden rounded-xl border border-[var(--border)]">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={aiImageUrl} alt="AI generated imagery" className="h-auto w-full" />
+            </div>
+          </div>
+        ) : null}
       </aside>
     </div>
   );
