@@ -1,0 +1,13 @@
+[project]
+name = "postpilot-scraper"
+version = "0.0.0"
+description = "PostPilot research/scraping microservice (Phase 3)"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi>=0.115.0",
+  "uvicorn[standard]>=0.32.0",
+  "httpx>=0.28.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0.0"]

@@ -1,101 +1,138 @@
-import { mkdir, writeFile, readFile, access } from "node:fs/promises";
-import path from "node:path";
+import { z } from "zod";
+import {
+  PutObjectCommand,
+  S3Client,
+  GetObjectCommand,
+} from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { randomUUID } from "node:crypto";
-import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
+import { mkdir, writeFile } from "node:fs/promises";
+import path from "node:path";
 
-export type StoredObject = {
-  key: string;
-  sizeBytes: number;
-  contentType: string;
-  backend: "local" | "s3";
-};
+export const storageConfigSchema = z.object({
+  endpoint: z.string().optional(),
+  region: z.string().default("auto"),
+  bucket: z.string().min(1),
+  accessKeyId: z.string().min(1).optional(),
+  secretAccessKey: z.string().min(1).optional(),
+  forcePathStyle: z.boolean().default(true),
+  publicUrl: z.string().optional(),
+  driver: z.enum(["s3", "local"]).default("s3"),
+  localRoot: z.string().default("./uploads"),
+});
 
-function storageRoot(): string {
-  return process.env.STORAGE_ROOT ?? path.join(process.cwd(), ".data", "storage");
+export type StorageConfig = z.infer<typeof storageConfigSchema>;
+
+export interface ObjectStorage {
+  putObject(input: {
+    key?: string;
+    body: Buffer | Uint8Array;
+    contentType: string;
+    prefix?: string;
+  }): Promise<{ key: string; url: string }>;
+  getSignedDownloadUrl(key: string, expiresInSeconds?: number): Promise<string>;
+  publicUrlFor(key: string): string;
 }
 
-function useS3(): boolean {
-  return Boolean(process.env.S3_ENDPOINT && process.env.S3_BUCKET);
-}
+export function createLocalStorage(raw: {
+  localRoot?: string;
+  publicUrl?: string;
+}): ObjectStorage {
+  const root = path.resolve(raw.localRoot ?? "./uploads");
+  const publicBase = (raw.publicUrl ?? "/media").replace(/\/$/, "");
 
-function s3Client(): S3Client {
-  return new S3Client({
-    region: process.env.S3_REGION ?? "us-east-1",
-    endpoint: process.env.S3_ENDPOINT,
-    forcePathStyle: process.env.S3_FORCE_PATH_STYLE !== "false",
-    credentials: {
-      accessKeyId: process.env.S3_ACCESS_KEY_ID ?? "minioadmin",
-      secretAccessKey: process.env.S3_SECRET_ACCESS_KEY ?? "minioadmin",
-    },
-  });
-}
-
-export function buildStorageKey(parts: {
-  organizationId: string;
-  kind: string;
-  filename: string;
-}): string {
-  const safeName = parts.filename.replace(/[^a-zA-Z0-9._-]/g, "_");
-  return `${parts.organizationId}/${parts.kind}/${Date.now()}-${randomUUID().slice(0, 8)}-${safeName}`;
-}
-
-export async function putObject(params: {
-  key: string;
-  body: Buffer | string;
-  contentType: string;
-}): Promise<StoredObject> {
-  const body = Buffer.isBuffer(params.body)
-    ? params.body
-    : Buffer.from(params.body, "utf8");
-
-  if (useS3()) {
-    const client = s3Client();
-    await client.send(
-      new PutObjectCommand({
-        Bucket: process.env.S3_BUCKET!,
-        Key: params.key,
-        Body: body,
-        ContentType: params.contentType,
-      }),
-    );
-    return {
-      key: params.key,
-      sizeBytes: body.byteLength,
-      contentType: params.contentType,
-      backend: "s3",
-    };
-  }
-
-  const fullPath = path.join(storageRoot(), params.key);
-  await mkdir(path.dirname(fullPath), { recursive: true });
-  await writeFile(fullPath, body);
   return {
-    key: params.key,
-    sizeBytes: body.byteLength,
-    contentType: params.contentType,
-    backend: "local",
+    publicUrlFor(key: string) {
+      return `${publicBase}/${key}`;
+    },
+    async putObject({ key, body, contentType, prefix = "uploads" }) {
+      const objectKey = key ?? `${prefix}/${randomUUID()}`;
+      const fullPath = path.join(root, objectKey);
+      await mkdir(path.dirname(fullPath), { recursive: true });
+      await writeFile(fullPath, body);
+      void contentType;
+      return { key: objectKey, url: this.publicUrlFor(objectKey) };
+    },
+    async getSignedDownloadUrl(key) {
+      return this.publicUrlFor(key);
+    },
   };
 }
 
-export async function getObject(key: string): Promise<Buffer> {
-  if (useS3()) {
-    const client = s3Client();
-    const res = await client.send(
-      new GetObjectCommand({
-        Bucket: process.env.S3_BUCKET!,
-        Key: key,
-      }),
-    );
-    const bytes = await res.Body?.transformToByteArray();
-    if (!bytes) throw new Error(`Empty S3 object: ${key}`);
-    return Buffer.from(bytes);
+export function createS3Storage(raw: StorageConfig): ObjectStorage {
+  const config = storageConfigSchema.parse(raw);
+  if (!config.accessKeyId || !config.secretAccessKey) {
+    throw new Error("S3 credentials required for s3 driver");
+  }
+  const client = new S3Client({
+    region: config.region,
+    endpoint: config.endpoint,
+    forcePathStyle: config.forcePathStyle,
+    credentials: {
+      accessKeyId: config.accessKeyId,
+      secretAccessKey: config.secretAccessKey,
+    },
+  });
+
+  function publicUrlFor(key: string): string {
+    if (config.publicUrl) {
+      return `${config.publicUrl.replace(/\/$/, "")}/${key}`;
+    }
+    if (config.endpoint) {
+      return `${config.endpoint.replace(/\/$/, "")}/${config.bucket}/${key}`;
+    }
+    return `https://${config.bucket}.s3.${config.region}.amazonaws.com/${key}`;
   }
 
-  const fullPath = path.join(storageRoot(), key);
-  await access(fullPath);
-  return readFile(fullPath);
+  return {
+    publicUrlFor,
+    async putObject({ key, body, contentType, prefix = "uploads" }) {
+      const objectKey = key ?? `${prefix}/${randomUUID()}`;
+      await client.send(
+        new PutObjectCommand({
+          Bucket: config.bucket,
+          Key: objectKey,
+          Body: body,
+          ContentType: contentType,
+        }),
+      );
+      return { key: objectKey, url: publicUrlFor(objectKey) };
+    },
+    async getSignedDownloadUrl(key, expiresInSeconds = 3600) {
+      return getSignedUrl(
+        client,
+        new GetObjectCommand({ Bucket: config.bucket, Key: key }),
+        { expiresIn: expiresInSeconds },
+      );
+    },
+  };
 }
 
-export async function getObjectText(key: string): Promise<string> {
-  return (await getObject(key)).toString("utf8");
+export function storageFromEnv(
+  env: NodeJS.ProcessEnv = process.env,
+): ObjectStorage {
+  const driver =
+    env.STORAGE_DRIVER === "local" || !env.S3_ACCESS_KEY_ID
+      ? "local"
+      : "s3";
+
+  if (driver === "local") {
+    return createLocalStorage({
+      localRoot: env.STORAGE_LOCAL_ROOT ?? "./uploads",
+      publicUrl: env.S3_PUBLIC_URL ?? "http://localhost:3000/media",
+    });
+  }
+
+  return createS3Storage(
+    storageConfigSchema.parse({
+      endpoint: env.S3_ENDPOINT,
+      region: env.S3_REGION ?? "auto",
+      bucket: env.S3_BUCKET ?? "postpilot",
+      accessKeyId: env.S3_ACCESS_KEY_ID,
+      secretAccessKey: env.S3_SECRET_ACCESS_KEY,
+      forcePathStyle: env.S3_FORCE_PATH_STYLE !== "false",
+      publicUrl: env.S3_PUBLIC_URL,
+      driver: "s3",
+    }),
+  );
 }

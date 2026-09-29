@@ -1,71 +1,47 @@
-# ShopData
+# PostPilot AI
 
-Shopify data management SaaS — import, export, and bulk-update store data with spreadsheet-friendly workflows.
-
-## Architecture
-
-See [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) for the full system design (product, schema, pipelines, security, roadmap).
-
-## Stack
-
-- **Web:** Next.js · React · TypeScript · Tailwind
-- **Workers:** Node.js · BullMQ · Redis
-- **DB:** PostgreSQL · Prisma
-- **Files:** S3-compatible (MinIO locally)
-- **Shopify:** Admin GraphQL + Bulk Operations · OAuth
+Your AI social media team — strategist, copywriter, designer, and scheduler in one.
 
 ## Quick start
 
 ```bash
-# 1. Infrastructure
 cp .env.example .env
 docker compose up -d
-
-# 2. Install & DB
-npm install
-npm run db:generate
-npm run db:push
-npm run db:seed
-npm run db:seed:demo
-
-# 3. App
-npm run dev
-
-# 4. Worker (separate terminal)
-npm run dev:worker
+pnpm install
+pnpm db:generate && pnpm db:push && pnpm db:seed
+pnpm dev
 ```
 
-Web: http://localhost:3000
+Open http://localhost:3000 → **Enter as demo user** (`demo@postpilot.ai`).
 
-## MVP scope
+## What works (complete loop)
 
-- Shopify OAuth + store connection (demo seed supported)
-- Dashboard
-- Product import (CSV / XLSX) with field mapping, validation, preview
-- Product export (CSV / XLSX) via Bulk Operations
-- Product bulk update (price / compare-at / inventory / status / tags)
-- Background jobs, progress, error reports, retry failed rows
-- Local disk or S3/MinIO artifact storage
-- Dry-run mode for demo tokens / `SHOPDATA_DRY_RUN=true`
+1. Onboarding + brand kit  
+2. Brand DNA generation  
+3. Competitor intelligence + niche playbook  
+4. Account stage diagnosis  
+5. Weekly 7-day plan generation  
+6. Copy + quality critic + branded PNG designs  
+7. Review board + magic-link approval  
+8. Schedule + dry-run publish  
+9. Metrics pulls + weekly report  
+10. Design Studio (ad-hoc posts)  
+11. Admin (jobs / AI cost log)
 
-## Workspaces
+Without live Meta/Stripe/LLM keys the product runs in **demo/dry-run** with real DB rows and PNGs. Add API keys for live providers.
 
-| Path | Package |
-|------|---------|
-| `apps/web` | Next.js UI + API |
-| `apps/worker` | Job workers |
-| `packages/db` | Prisma schema |
-| `packages/shared` | Shared types/utils |
-| `packages/shopify` | OAuth + GraphQL client |
-| `packages/files` | Parse / map / validate / XLSX |
-| `packages/jobs` | Queue producers/consumers |
-| `packages/storage` | Local disk / S3 object storage |
+## Scripts
 
-## Demo
+| Command | Purpose |
+|---------|---------|
+| `pnpm dev` | Web + worker |
+| `pnpm db:seed` | Demo workspace (Lumen Café) |
+| `pnpm lint` / `typecheck` / `test` | CI |
 
-```bash
-npm run db:seed:demo
-# Then open http://localhost:3000/app/stores and use the Demo Store.
-# Imports/exports/bulk-updates run in dry-run mode for the demo token.
-```
+## Docs
 
+- `docs/PRODUCT_SPEC.md`
+- `docs/ARCHITECTURE.md`
+- `docs/COMPLETE.md`
+- `docs/DESIGN_STUDIO.md`
+- `docs/DECISIONS.md`

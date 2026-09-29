@@ -1,20 +1,37 @@
 import type { Metadata } from "next";
+import { Fraunces, Sora } from "next/font/google";
+import { Providers } from "@/components/providers";
 import "./globals.css";
 
+const display = Fraunces({
+  subsets: ["latin"],
+  variable: "--font-display",
+});
+
+const sans = Sora({
+  subsets: ["latin"],
+  variable: "--font-sans",
+});
+
 export const metadata: Metadata = {
-  title: "ShopData — Shopify data operations, simplified",
+  title: {
+    default: "PostPilot AI",
+    template: "%s · PostPilot",
+  },
   description:
-    "Import, export, and bulk-update Shopify data with spreadsheet-friendly workflows.",
+    "Your AI social media team: strategist, copywriter, designer, and scheduler in one.",
 };
 
 export default function RootLayout({
   children,
-}: Readonly<{
+}: {
   children: React.ReactNode;
-}>) {
+}) {
   return (
-    <html lang="en">
-      <body>{children}</body>
+    <html lang="en" suppressHydrationWarning>
+      <body className={`${display.variable} ${sans.variable} antialiased`}>
+        <Providers>{children}</Providers>
+      </body>
     </html>
   );
 }
